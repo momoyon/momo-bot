@@ -1,0 +1,9 @@
+venv
+songs
+tags
+__pycache__
+.download_archive
+bot.pipe
+*.env
+.dmypy.json
+cookies.txt
