@@ -13,6 +13,7 @@ running = True
 FFMPEG_OPTS = {'options': '-vn'}
 
 # TODO: Use Context.current_parameter, etc for parsing of arguments
+# TODO: Remove song from queue when current song ends; Have to !!stop to remove from queue rn.
 
 DOWNLOAD_PATH = "./songs/"
 DOWNLOAD_ARCHIVE_PATH = f".download_archive"
@@ -29,7 +30,7 @@ options = {
     # "quiet": True,
     "logger": logging.Logger("yt_dlp")
 }
-queue : List[dict] = []
+music_queue : List[dict] = []
 ytdlp = yt_dlp.YoutubeDL(options)
 
 def log_info(msg: str):
@@ -142,6 +143,17 @@ async def ping(ctx):
         return
     await ctx.channel.send("pong!")
 
+@bot.command("queue", help="Lists the songs in the queue.")
+async def queue(ctx):
+    if ctx.author == bot.user:
+        return
+
+    if len(music_queue) <= 0:
+        await ctx.send("Music queue is empty!")
+        return
+
+    for m in music_queue:
+        await ctx.send(f"- {m['info']['title']}")
 @bot.command("play", help="Play youtube videos; Only certain videos are playable because i have to download the whole file to play it... (i dont have infinite storage)")
 async def play(ctx, *args):
     if (len(args) < 1):
