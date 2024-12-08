@@ -154,6 +154,7 @@ async def queue(ctx):
 
     for m in music_queue:
         await ctx.send(f"- {m['info']['title']}")
+
 @bot.command("play", help="Play youtube videos; Only certain videos are playable because i have to download the whole file to play it... (i dont have infinite storage)")
 async def play(ctx, *args):
     if (len(args) < 1):
@@ -166,63 +167,72 @@ async def play(ctx, *args):
         await ctx.send("Please join a Voice Channel and run the command!", silent=True)
         return
 
-    try:
-        info_dict = ytdlp.extract_info(link, download=False)
-    except yt_dlp.utils.DownloadError:
-        log_error(f"Invalid youtube link '{link}'")
-        await ctx.send(f"ERROR: Invalid youtube link '{link}'")
-        return
-    id = info_dict["id"]
-    title = info_dict["title"]
-
-    # Download if not cached
-    if not is_video_downloaded(id):
-        await ctx.send("Song is not cached, downloading...", silent=True)
-        log_info("Song is not cached, downloading...")
-        if not download(link, title, id):
-            await ctx.send(f"Invalid youtube link '{link}'", silent=True)
-            return
-    else:
-        # await ctx.send("Song is cached, playing...", delete_after=10.0, silent=True)
-        log_info("Song is cached, playing...")
-
-    # make the bot join vc
-    if not ctx.guild.voice_client: # error would be thrown if bot already connected, this stops the error
-        player = await ctx.author.voice.channel.connect()
-    else:
-        player = ctx.guild.voice_client
-
-    src = f"{DOWNLOAD_PATH}{id}.mp3"
-
-    queue.insert(0, {"info": info_dict, "link": link})
-
-    if player.is_playing():
-        assert(len(queue) >= 2)
-        await ctx.send(f"Song already playing, added to queue", silent=True)
-    else:
-        log_info(f"Playing '{title}'...")
-        await ctx.send(f"Playing '{title}'...", silent=True)
-
+    async with ctx.typing():
         try:
-            player.play(FFmpegPCMAudio(src, **FFMPEG_OPTS), after=lambda e: stop(ctx))
-        except Exception as err:
-            log_error(f"{err}")
+            info_dict = ytdlp.extract_info(link, download=False)
+        except yt_dlp.utils.DownloadError:
+            log_error(f"Invalid youtube link '{link}'")
+            await ctx.send(f"ERROR: Invalid youtube link '{link}'")
             return
+        id = info_dict["id"]
+        title = info_dict["title"]
+
+        # Download if not cached
+        if not is_video_downloaded(id):
+            await ctx.send("Song is not cached, downloading...", silent=True)
+            log_info("Song is not cached, downloading...")
+            if not download(link, title, id):
+                await ctx.send(f"Invalid youtube link '{link}'", silent=True)
+                return
+        else:
+            # await ctx.send("Song is cached, playing...", delete_after=10.0, silent=True)
+            log_info("Song is cached, playing...")
+
+        # make the bot join vc
+        if not ctx.guild.voice_client: # error would be thrown if bot already connected, this stops the error
+            player = await ctx.author.voice.channel.connect()
+        else:
+            player = ctx.guild.voice_client
+
+        src = f"{DOWNLOAD_PATH}{id}.mp3"
+
+        if player.is_playing():
+            assert(len(music_queue) > 0)
+            # The song is in the queue
+            for m in music_queue:
+                if title == m['info']['title']:
+                    await ctx.send("Song is already in the queue!", silent=True)
+                    return
+
+            await ctx.send(f"Another song is already playing, added to queue", silent=True)
+            music_queue.insert(0, {"info": info_dict, "link": link})
+        else:
+            log_info(f"Playing '{title}'...")
+            await ctx.send(f"Playing '{title}'...", silent=True)
+
+            music_queue.insert(0, {"info": info_dict, "link": link})
+
+            try:
+                player.play(FFmpegPCMAudio(src, **FFMPEG_OPTS), after=lambda e: music_queue.pop(0))
+            except Exception as err:
+                await ctx.send(f"ERROR: Failed to play {title}: {err}")
+                log_error(f"{err}")
+                return
 
 @bot.command("stop", help="Stops the currently playing song, if any.")
 async def stop(ctx):
     if ctx.guild.voice_client:
         ctx.guild.voice_client.stop()
-        if len(queue) > 0:
-            top = queue.pop()
+        if len(music_queue) > 0:
+            top = music_queue.pop()
             title = top["info"]["title"]
             await ctx.send(f"Stopped playing '{title}'...", delete_after=10.0, silent=True)
-        if len(queue) <= 0:
+        if len(music_queue) <= 0:
             await ctx.send("No song left in queue, leaving VC", delete_after=10.0, silent=True)
             await ctx.guild.voice_client.disconnect()
         else:
             await ctx.send("Playing next song in queue...", delete_after=10.0, silent=True)
-            next_song_link = queue[0]["link"]
+            next_song_link = music_queue[0]["link"]
             await play(ctx, next_song_link)
     else:
         await ctx.send(f"No song is playing!", delete_after=10.0, silent=True)
@@ -230,12 +240,12 @@ async def stop(ctx):
 @bot.command("pause", help="Paused the currently playing song, if any.")
 async def pause(ctx):
     if ctx.guild.voice_client:
-        assert(len(queue) > 0)
+        assert(len(music_queue) > 0)
         if not ctx.guild.voice_client.is_playing():
             await ctx.send("The song is already paused dummy!", delete_after=10.0, silent=True)
         else:
             ctx.guild.voice_client.pause()
-            title = queue[0]["info"]["title"]
+            title = music_queue[0]["info"]["title"]
             await ctx.send(f"Paused {title}...", delete_after=10.0, silent=True)
     else:
         await ctx.send(f"No song is currently playing", delete_after=10.0, silent=True)
@@ -243,12 +253,12 @@ async def pause(ctx):
 @bot.command("resume", help="Resumes the currently paused song, if any.")
 async def resume(ctx):
     if ctx.guild.voice_client:
-        assert(len(queue) > 0)
+        assert(len(music_queue) > 0)
         if ctx.guild.voice_client.is_playing():
             await ctx.send("The song is already playing dummy!", delete_after=10.0, silent=True)
         else:
             ctx.guild.voice_client.resume()
-            title = queue[0]["info"]["title"]
+            title = music_queue[0]["info"]["title"]
             await ctx.send(f"Resumed {title}...", delete_after=10.0, silent=True)
     else:
         await ctx.send(f"No song is currently paused/playing", delete_after=10.0, silent=True)
