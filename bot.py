@@ -12,6 +12,8 @@ running = True
 
 FFMPEG_OPTS = {'options': '-vn'}
 
+# TODO: Use Context.current_parameter, etc for parsing of arguments
+
 DOWNLOAD_PATH = "./songs/"
 DOWNLOAD_ARCHIVE_PATH = f".download_archive"
 options = {
@@ -46,7 +48,7 @@ def is_video_downloaded(id: str) -> bool:
                     return True
         return False
 
-    except Exception as err:
+    except Exception:
         with open(DOWNLOAD_ARCHIVE_PATH, 'w') as f:
             pass
         log_info(f"Created download_archive: {DOWNLOAD_ARCHIVE_PATH}")
@@ -56,7 +58,7 @@ def download(link: str, title: str, id: str) -> bool:
     log_info(f"Trying to download '{link}'")
     try:
         ytdlp.download(link)
-    except:
+    except yt_dlp.utils.DownloadError:
         log_error(f"Invalid youtube link '{link}'")
         return False
 
@@ -66,6 +68,7 @@ def download(link: str, title: str, id: str) -> bool:
     return True
 
 intents = ds.Intents.default()
+intents.members = True
 intents.message_content = True
 # intents.manage_messages = True
 
@@ -104,6 +107,34 @@ async def poop(ctx):
     if ctx.author == bot.user:
         return
     await ctx.reply("Shit yourself nigger")
+
+@bot.command("av", help="Displays the given user's avatar.")
+async def av(ctx, *args):
+    if ctx.author == bot.user:
+        return
+    if len(args) < 1:
+        await ctx.send("ERROR: Please provide the user to display the avatar!", delete_after=5.0, silent=True)
+        return
+
+    user_id = args[0]
+
+    # Renove non-digits
+    user_id = user_id.removeprefix('<')
+    user_id = user_id.removeprefix('@')
+    user_id = user_id.removesuffix('>')
+
+    # convert user id from str -> int
+    user_id = int(user_id)
+
+    log_info(f"Fetching {user_id}...")
+
+    user: User = await bot.fetch_user(user_id)
+
+    log_info(f"Fetched {user}")
+
+    log_info(f"Avatar for {user}: {user.display_avatar}")
+
+    await ctx.send(user.display_avatar)
 
 @bot.command("ping", help="Command for testing if the bot is online; bot should reply with 'pong!'")
 async def ping(ctx):
