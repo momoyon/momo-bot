@@ -6,7 +6,12 @@ import yt_dlp
 from typing import *
 from dotenv import load_dotenv
 
-import logging
+import coloredlogs, logging
+
+logging.basicConfig(level=logging.DEBUG)
+
+coloredlogs.install()
+logger: logging.Logger = logging.getLogger("bot")
 
 running = True
 
@@ -19,6 +24,7 @@ SOURCE_CODE_FILENAME="bot.stable.py"
 
 # TODO: Use Context.current_parameter, etc for parsing of arguments
 # TODO: Remove song from queue when current song ends; Have to !!stop to remove from queue rn.
+# TODO: Implement something on on_member_join
 
 DOWNLOAD_PATH = "./songs/"
 DOWNLOAD_ARCHIVE_PATH = f".download_archive"
@@ -33,17 +39,18 @@ options = {
     # "default_search": "auto",
     # "no_warnings": True,
     # "quiet": True,
-    "logger": logging.Logger("yt_dlp")
+    "logger": logging.getLogger("yt_dlp")
 }
 music_queue : List[dict] = []
 ytdlp = yt_dlp.YoutubeDL(options)
 
 def log_info(msg: str):
-    print(f"INFO: {msg}")
+    logger.info(msg)
+    # print(f"INFO: {msg}")
 
 def log_error(msg: str):
-    print(f"ERROR: {msg}", file=sys.stderr)
-
+    logger.error(msg)
+    # print(f"ERROR: {msg}", file=sys.stderr)
 
 # Helpers
 async def play_audio(ctx, player, title: str, id: str):
@@ -120,7 +127,7 @@ async def on_message(msg):
             await msg.reply(content=f"{msg.author.mention} shared {convert_insta_reel_link(msg.content)}")
 
     # TODO: Handle msg.guild == None case
-    log_info(f"[{msg.guild.name}::{msg.channel.name}]{msg.author}: '{msg.content}'")
+    log_info(f"[{msg.created_at}][{msg.guild.name}::{msg.channel.name}] {msg.author}: '{msg.content}'")
     await bot.process_commands(msg)
 
 @bot.command("src", help="Prints the source code for this bot.")
