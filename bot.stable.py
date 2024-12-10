@@ -146,7 +146,7 @@ async def src(ctx):
 
             # Send the whole file as a file
             file = ds.File(f, filename=SOURCE_CODE_FILENAME)
-            await ctx.send(SOURCE_CODE_FILENAME, file=file)
+            await ctx.send(file=file)
     except FileNotFoundError:
         log_error(f"File '{SOURCE_CODE_FILENAME}' doesn't exist!")
         log_info("Please run build.sh to copy bot.py -> bot.stable.py")
