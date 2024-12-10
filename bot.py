@@ -373,6 +373,9 @@ KYS_REPONSES = [
         ]
 @bot.command("kys", help="I will KYS :)")
 async def kys(ctx):
+    if ctx.author.name != '.momoyon':
+        await ctx.send("What about *YOU* kys?")
+        return
     await ctx.send(random.choice(KYS_REPONSES))
     running = False
     await ctx.bot.close()
