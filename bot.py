@@ -89,7 +89,6 @@ def download(link: str, title: str, id: str) -> bool:
     except yt_dlp.utils.DownloadError:
         log_error(f"Invalid youtube link '{link}'")
         return False
-
     with open(DOWNLOAD_ARCHIVE_PATH, 'a') as f:
         f.write(f"{id} {title}\n")
     log_info(F"Downloaded {title}...")
@@ -129,6 +128,30 @@ async def on_message(msg):
     # TODO: Handle msg.guild == None case
     log_info(f"[{msg.created_at}][{msg.guild.name}::{msg.channel.name}] {msg.author}: '{msg.content}'")
     await bot.process_commands(msg)
+
+# TODO: Make it so we dynamically search "marisad" on tenor and pick a random link
+MARISAD_GIFS = [
+        'https://tenor.com/view/marisa-kirisame-touhou-project-sad-crying-gif-24418828',
+        'https://tenor.com/view/marisad-touhou-marisa-kirisame-sad-gif-20456205',
+        'https://tenor.com/view/marisa-cry-spin-rain-touhou-gif-22503177',
+        'https://media.tenor.com/eYM3tar4rtkAAAAM/marisa-touhou.gif',
+        'https://tenor.com/view/touhou-touhou-project-2hu-marisa-marisa-kirisame-gif-22639972',
+        'https://tenor.com/view/touhou-touhou-project-kirisame-marisa-marisa-kirisame-gif-11936097800016515634',
+        'https://media.tenor.com/raHKUM94bmoAAAAM/marisa-marisa-fumo.gif',
+        'https://media.tenor.com/I-eNMAa65gMAAAAM/marisad-potto.gif',
+        'https://media.tenor.com/xMK8WwNBVuIAAAAM/marisa-marisakirisame.gif',
+        'https://media.tenor.com/kZ2En0Slm28AAAAM/marisa-touhou.gif',
+        'https://media.tenor.com/v5oS9ZOVq0cAAAAM/marisa-kirisame-touhou.gif',
+        ]
+@bot.command("marisad", help="Marisa. 1% Chance for something special :D")
+async def marisad(ctx):
+    if ctx.author == bot.user:
+        return
+    async with ctx.typing():
+        if random.random() <= 0.1:
+            await ctx.send('https://cdn.discordapp.com/attachments/906230633540485164/1316329779624153118/caption.gif?ex=675aa723&is=675955a3&hm=1826753181d4dc7bb5bd79442b2a74b824fee9b7c03ea1242a5386612e3e74aa&')
+        else:
+            await ctx.send(random.choice(MARISAD_GIFS))
 
 @bot.command("src", help="Prints the source code for this bot.")
 async def src(ctx):
