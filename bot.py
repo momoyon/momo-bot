@@ -9,8 +9,8 @@ import asyncio
 import coloredlogs, logging
 
 # Init Logging
-logging.basicConfig(level=logging.DEBUG)
-coloredlogs.install()
+logging.basicConfig(level=logging.INFO)
+coloredlogs.install(level=logging.INFO)
 logger: logging.Logger = logging.getLogger("bot")
 
 FFMPEG_OPTS = {'options': '-vn'}
@@ -26,11 +26,12 @@ SOURCE_CODE_FILENAME="bot.stable.py"
 
 def log_info(msg: str):
     logger.info(msg)
-    # print(f"INFO: {msg}")
 
 def log_error(msg: str):
     logger.error(msg)
-    # print(f"ERROR: {msg}", file=sys.stderr)
+
+def log_debug(msg: str):
+    logger.debug(msg)
 
 # Helpers
 intents = ds.Intents.default()
@@ -137,7 +138,7 @@ class MusicCog(cmds.Cog, name="Music"):
         self.music_queue : List[dict] = []
         self.ytdlp = yt_dlp.YoutubeDL(yt_dlp_options)
 
-    async def play_audio(ctx, player, title: str, id: str):
+    async def play_audio(self, ctx, player, title: str, id: str):
         log_info(f"Playing '{title}'...")
         await ctx.send(f"Playing '{title}'...", silent=True)
 
@@ -151,7 +152,7 @@ class MusicCog(cmds.Cog, name="Music"):
 
 
     # TODO: check if file exists in disk
-    def is_video_downloaded(id: str) -> bool:
+    def is_video_downloaded(self, id: str) -> bool:
         checking_id = id
         try:
             with open(self.DOWNLOAD_ARCHIVE_PATH) as f:
@@ -166,7 +167,7 @@ class MusicCog(cmds.Cog, name="Music"):
             log_info(f"Created download_archive: {self.DOWNLOAD_ARCHIVE_PATH}")
             return False
 
-    def download(link: str, title: str, id: str) -> bool:
+    def download(self, link: str, title: str, id: str) -> bool:
         log_info(f"Trying to download '{link}'")
         try:
             self.ytdlp.download(link)
@@ -240,7 +241,7 @@ class MusicCog(cmds.Cog, name="Music"):
                     log_info("Song is not cached, downloading...")
                     if not self.download(link, title, id):
                         await ctx.send(f"ERROR: Invalid youtube link '{link}'", silent=True)
-                        log_info(f"ERROR: Invalid youtube link '{link}'")
+                        log_error(f"Invalid youtube link '{link}'")
                         return
 
                 self.music_queue.insert(0, {"info": info_dict, "link": link})
@@ -252,7 +253,6 @@ class MusicCog(cmds.Cog, name="Music"):
         if ctx.guild.voice_client:
             ctx.guild.voice_client.stop()
             if len(self.music_queue) > 0:
-                log_info("MUSIC POPPED FROM QUEUE in stop")
                 top = self.music_queue.pop()
                 title = top["info"]["title"]
                 await ctx.send(f"Stopped playing '{title}'...", silent=True)
@@ -291,7 +291,6 @@ class MusicCog(cmds.Cog, name="Music"):
                 if ctx.voice_client.is_playing():
                     ctx.voice_client.stop()
 
-            log_info("MUSIC POPPED FROM QUEUE in next")
             current_song = self.music_queue.pop(0)['info']['title']
             log_info(f"Stopped playing {current_song}")
 
@@ -393,9 +392,6 @@ async def on_ready():
 async def on_message(msg):
     if msg.author == bot.user:
         return
-    if is_insta_reel_link(msg.content):
-        if not is_already_ddd_converted_link(msg.content):
-            await msg.reply(content=f"{msg.author.mention} shared {convert_insta_reel_link(msg.content)}")
 
     # TODO: Handle msg.guild == None case
     log_info(f"[{msg.created_at}][{msg.guild.name}::{msg.channel.name}] {msg.author}: '{msg.content}'")
@@ -412,7 +408,7 @@ def main():
 
     load_dotenv()
     token = os.environ["TOKEN"]
-    bot.run(token)
+    bot.run(token, log_handler=None)
 
 if __name__ == '__main__':
     main()
