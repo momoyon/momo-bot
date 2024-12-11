@@ -360,18 +360,6 @@ class DevCog(cmds.Cog, name='Dev'):
 
 ##################################################
 
-def is_already_ddd_converted_link(msg_content: str) -> bool:
-    return msg_content.find('d.ddinstagram') >= 0
-
-def convert_insta_reel_link(msg_content: str) -> str:
-    msg_content = msg_content.replace('www.', '')
-    insta_id: int = msg_content.find('instagram')
-    assert(insta_id >= 0)
-    return msg_content.replace('instagram', 'd.ddinstagram')
-
-def is_insta_reel_link(msg_content: str) -> bool:
-    return msg_content.find('instagram') >= 0 and msg_content.find('reel') >= 0
-
 @bot.event
 async def on_ready():
     log_info(f'{bot.user} logged in!')
@@ -388,22 +376,22 @@ async def on_message(msg):
     log_info(f"[{msg.created_at}][{msg.guild.name}::{msg.channel.name}] {msg.author}: '{msg.content}'")
     await bot.process_commands(msg)
 
-# TODO: Make it so we dynamically search "marisad" on tenor and pick a random link
-MARISAD_GIFS = [
-        'https://tenor.com/view/marisa-kirisame-touhou-project-sad-crying-gif-24418828',
-        'https://tenor.com/view/marisad-touhou-marisa-kirisame-sad-gif-20456205',
-        'https://tenor.com/view/marisa-cry-spin-rain-touhou-gif-22503177',
-        'https://media.tenor.com/eYM3tar4rtkAAAAM/marisa-touhou.gif',
-        'https://tenor.com/view/touhou-touhou-project-2hu-marisa-marisa-kirisame-gif-22639972',
-        'https://tenor.com/view/touhou-touhou-project-kirisame-marisa-marisa-kirisame-gif-11936097800016515634',
-        'https://media.tenor.com/raHKUM94bmoAAAAM/marisa-marisa-fumo.gif',
-        'https://media.tenor.com/I-eNMAa65gMAAAAM/marisad-potto.gif',
-        'https://media.tenor.com/xMK8WwNBVuIAAAAM/marisa-marisakirisame.gif',
-        'https://media.tenor.com/kZ2En0Slm28AAAAM/marisa-touhou.gif',
-        'https://media.tenor.com/v5oS9ZOVq0cAAAAM/marisa-kirisame-touhou.gif',
-        ]
 @bot.command("marisad", help="Marisa. 1% Chance for something special :D")
 async def marisad(ctx):
+    # TODO: Make it so we dynamically search "marisad" on tenor and pick a random link
+    MARISAD_GIFS = [
+            'https://tenor.com/view/marisa-kirisame-touhou-project-sad-crying-gif-24418828',
+            'https://tenor.com/view/marisad-touhou-marisa-kirisame-sad-gif-20456205',
+            'https://tenor.com/view/marisa-cry-spin-rain-touhou-gif-22503177',
+            'https://media.tenor.com/eYM3tar4rtkAAAAM/marisa-touhou.gif',
+            'https://tenor.com/view/touhou-touhou-project-2hu-marisa-marisa-kirisame-gif-22639972',
+            'https://tenor.com/view/touhou-touhou-project-kirisame-marisa-marisa-kirisame-gif-11936097800016515634',
+            'https://media.tenor.com/raHKUM94bmoAAAAM/marisa-marisa-fumo.gif',
+            'https://media.tenor.com/I-eNMAa65gMAAAAM/marisad-potto.gif',
+            'https://media.tenor.com/xMK8WwNBVuIAAAAM/marisa-marisakirisame.gif',
+            'https://media.tenor.com/kZ2En0Slm28AAAAM/marisa-touhou.gif',
+            'https://media.tenor.com/v5oS9ZOVq0cAAAAM/marisa-kirisame-touhou.gif',
+    ]
     if ctx.author == bot.user:
         return
     async with ctx.typing():
@@ -411,38 +399,6 @@ async def marisad(ctx):
             await ctx.send('https://cdn.discordapp.com/attachments/906230633540485164/1316329779624153118/caption.gif?ex=675aa723&is=675955a3&hm=1826753181d4dc7bb5bd79442b2a74b824fee9b7c03ea1242a5386612e3e74aa&')
         else:
             await ctx.send(random.choice(MARISAD_GIFS))
-
-@bot.command("ddinsta", help="Diddify a instagram reel link with the provided message id.")
-async def ddinsta(ctx):
-    ref = ctx.message.reference
-    if not ref:
-        await ctx.send("ERROR: Please reply to the message you want to diddify!", silent=True)
-        return
-
-    msg = await ctx.fetch_message(ref.message_id)
-    if is_already_ddd_converted_link(msg.content):
-        await ctx.send("That is already a diddy link nigger", silent=True)
-        return
-    else:
-        await msg.channel.send(content=f"{msg.author.mention} shared {convert_insta_reel_link(msg.content)}", silent=True)
-        await ctx.message.delete()
-
-# PIPE_FILE="./bot.pipe"
-# def pipe_eater():
-#     while running:
-#         time.sleep(1)
-#         try:
-#             with open(PIPE_FILE) as pipe:
-#                 line = pipe.readline()
-#                 line.strip()
-#                 if len(line) > 0:
-#                     print(f"[PIPE] {line}")
-#             with open(PIPE_FILE, mode='w') as pipe:
-#                 pass
-#         except FileNotFoundError:
-#             with open(PIPE_FILE, mode='w') as pipe:
-#                 pass
-
 
 async def add_cogs():
     await bot.add_cog(MiscCog(bot))
@@ -458,7 +414,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-    # p = mp.Process(target=main)
-    # p.start()
-    # pipe_eater()
-    # p.join()
