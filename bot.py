@@ -24,24 +24,6 @@ SOURCE_CODE_FILENAME="bot.stable.py"
 # TODO: Remove song from queue when current song ends; Have to !!stop to remove from queue rn.
 # TODO: Implement something on on_member_join
 
-DOWNLOAD_PATH = "./songs/"
-DOWNLOAD_ARCHIVE_PATH = f".download_archive"
-options = {
-    "outtmpl": f"{DOWNLOAD_PATH}%(id)s.mp3",
-    "format": "bestaudio",
-    "cookiefile": "cookies.txt",
-    # "extract_audio": True,
-    "windowsfilenames": False,
-    "overwrites": True,
-    "cachedir": f"{DOWNLOAD_PATH}/cache",
-    # "default_search": "auto",
-    # "no_warnings": True,
-    # "quiet": True,
-    "logger": logging.getLogger("yt_dlp")
-}
-music_queue : List[dict] = []
-ytdlp = yt_dlp.YoutubeDL(options)
-
 def log_info(msg: str):
     logger.info(msg)
     # print(f"INFO: {msg}")
@@ -137,13 +119,30 @@ class MiscCog(cmds.Cog, name="Miscellaneous"):
 class MusicCog(cmds.Cog, name="Music"):
     def __init__(self, bot):
         self.bot = bot
+        self.DOWNLOAD_PATH = "./songs/"
+        self.DOWNLOAD_ARCHIVE_PATH = f".download_archive"
+        yt_dlp_options = {
+            "outtmpl": f"{self.DOWNLOAD_PATH}%(id)s.mp3",
+            "format": "bestaudio",
+            "cookiefile": "cookies.txt",
+            # "extract_audio": True,
+            "windowsfilenames": False,
+            "overwrites": True,
+            "cachedir": f"{self.DOWNLOAD_PATH}/cache",
+            # "default_search": "auto",
+            # "no_warnings": True,
+            # "quiet": True,
+            "logger": logging.getLogger("yt_dlp")
+        }
+        self.music_queue : List[dict] = []
+        self.ytdlp = yt_dlp.YoutubeDL(yt_dlp_options)
 
     async def play_audio(ctx, player, title: str, id: str):
         log_info(f"Playing '{title}'...")
         await ctx.send(f"Playing '{title}'...", silent=True)
 
         try:
-            src = f"{DOWNLOAD_PATH}{id}.mp3"
+            src = f"{self.DOWNLOAD_PATH}{id}.mp3"
             player.play(FFmpegPCMAudio(src, **FFMPEG_OPTS))
         except Exception as err:
             await ctx.send(f"ERROR: Failed to play {title}: {err}", silent=True)
@@ -155,26 +154,26 @@ class MusicCog(cmds.Cog, name="Music"):
     def is_video_downloaded(id: str) -> bool:
         checking_id = id
         try:
-            with open(DOWNLOAD_ARCHIVE_PATH) as f:
+            with open(self.DOWNLOAD_ARCHIVE_PATH) as f:
                 for line in f.read().split('\n'):
                     if line.split(' ')[0] == checking_id:
                         return True
             return False
 
         except Exception:
-            with open(DOWNLOAD_ARCHIVE_PATH, 'w') as f:
+            with open(self.DOWNLOAD_ARCHIVE_PATH, 'w') as f:
                 pass
-            log_info(f"Created download_archive: {DOWNLOAD_ARCHIVE_PATH}")
+            log_info(f"Created download_archive: {self.DOWNLOAD_ARCHIVE_PATH}")
             return False
 
     def download(link: str, title: str, id: str) -> bool:
         log_info(f"Trying to download '{link}'")
         try:
-            ytdlp.download(link)
+            self.ytdlp.download(link)
         except yt_dlp.utils.DownloadError:
             log_error(f"Invalid youtube link '{link}'")
             return False
-        with open(DOWNLOAD_ARCHIVE_PATH, 'a') as f:
+        with open(self.DOWNLOAD_ARCHIVE_PATH, 'a') as f:
             f.write(f"{id} {title}\n")
         log_info(F"Downloaded {title}...")
         return True
@@ -184,12 +183,12 @@ class MusicCog(cmds.Cog, name="Music"):
             if ctx.author == bot.user:
                 return
 
-            if len(music_queue) <= 0:
+            if len(self.music_queue) <= 0:
                 await ctx.send("Music queue is empty!", silent=True)
                 return
 
             msg: str = "Music: Queue: "
-            for m in music_queue:
+            for m in self.music_queue:
                 msg += f"\n- {m['info']['title']}"
 
             await ctx.send(msg, silent=True)
@@ -209,7 +208,7 @@ class MusicCog(cmds.Cog, name="Music"):
                 return
 
             try:
-                info_dict = ytdlp.extract_info(link, download=False)
+                info_dict = self.ytdlp.extract_info(link, download=False)
             except yt_dlp.utils.DownloadError:
                 log_error(f"Invalid youtube link '{link}'")
                 await ctx.send(f"ERROR: Invalid youtube link '{link}'", silent=True)
@@ -218,7 +217,7 @@ class MusicCog(cmds.Cog, name="Music"):
             title = info_dict["title"]
 
             # The song is in the queue
-            for m in music_queue:
+            for m in self.music_queue:
                 if title == m['info']['title']:
                     await ctx.send("Song is already in the queue!", silent=True)
                     return
@@ -230,10 +229,10 @@ class MusicCog(cmds.Cog, name="Music"):
                 player = ctx.guild.voice_client
 
             if player.is_playing():
-                assert(len(music_queue) > 0)
+                assert(len(self.music_queue) > 0)
 
                 await ctx.send(f"Another song is already playing, added to queue", silent=True)
-                music_queue.append({"info": info_dict, "link": link})
+                self.music_queue.append({"info": info_dict, "link": link})
             else:
                 # Download if not cached
                 if not self.is_video_downloaded(id):
@@ -244,7 +243,7 @@ class MusicCog(cmds.Cog, name="Music"):
                         log_info(f"ERROR: Invalid youtube link '{link}'")
                         return
 
-                music_queue.insert(0, {"info": info_dict, "link": link})
+                self.music_queue.insert(0, {"info": info_dict, "link": link})
 
                 await self.play_audio(self, ctx, player, title, id)
 
@@ -252,17 +251,17 @@ class MusicCog(cmds.Cog, name="Music"):
     async def stop(self, ctx):
         if ctx.guild.voice_client:
             ctx.guild.voice_client.stop()
-            if len(music_queue) > 0:
+            if len(self.music_queue) > 0:
                 log_info("MUSIC POPPED FROM QUEUE in stop")
-                top = music_queue.pop()
+                top = self.music_queue.pop()
                 title = top["info"]["title"]
                 await ctx.send(f"Stopped playing '{title}'...", silent=True)
-            if len(music_queue) <= 0:
+            if len(self.music_queue) <= 0:
                 await ctx.send("No song left in queue, leaving VC", silent=True)
                 await ctx.guild.voice_client.disconnect()
             else:
                 await ctx.send("Playing next song in queue...", silent=True)
-                next_song_link = music_queue[0]["link"]
+                next_song_link = self.music_queue[0]["link"]
                 await play(self, ctx, next_song_link)
         else:
             await ctx.send(f"No song is playing!", silent=True)
@@ -273,7 +272,7 @@ class MusicCog(cmds.Cog, name="Music"):
             return
         async with ctx.typing():
             async def no_next_song() -> bool:
-                if len(music_queue) <= 0:
+                if len(self.music_queue) <= 0:
                     if ctx.guild.voice_client:
                         await ctx.send("No song in queue; Exiting from VC", silent=True)
                         await ctx.guild.voice_client.disconnect()
@@ -293,12 +292,12 @@ class MusicCog(cmds.Cog, name="Music"):
                     ctx.voice_client.stop()
 
             log_info("MUSIC POPPED FROM QUEUE in next")
-            current_song = music_queue.pop(0)['info']['title']
+            current_song = self.music_queue.pop(0)['info']['title']
             log_info(f"Stopped playing {current_song}")
 
             if await no_next_song(): return
 
-            next_song = music_queue[0]
+            next_song = self.music_queue[0]
             title: str = next_song['info']['title']
             id: str = next_song['info']['id']
 
@@ -310,12 +309,12 @@ class MusicCog(cmds.Cog, name="Music"):
     @cmds.command("pause", help="Paused the currently playing song, if any.")
     async def pause(self, ctx):
         if ctx.guild.voice_client:
-            assert(len(music_queue) > 0)
+            assert(len(self.music_queue) > 0)
             if not ctx.guild.voice_client.is_playing():
                 await ctx.send("The song is already paused dummy!", delete_after=10.0, silent=True)
             else:
                 ctx.guild.voice_client.pause()
-                title = music_queue[0]["info"]["title"]
+                title = self.music_queue[0]["info"]["title"]
                 await ctx.send(f"Paused {title}...", delete_after=10.0, silent=True)
         else:
             await ctx.send(f"No song is currently playing", delete_after=10.0, silent=True)
@@ -324,12 +323,12 @@ class MusicCog(cmds.Cog, name="Music"):
     async def resume(self, ctx):
         if ctx.guild.voice_client:
             # Disconnect from VC instead of asserting
-            assert(len(music_queue) > 0)
+            assert(len(self.music_queue) > 0)
             if ctx.guild.voice_client.is_playing():
                 await ctx.send("The song is already playing dummy!", delete_after=10.0, silent=True)
             else:
                 ctx.guild.voice_client.resume()
-                title = music_queue[0]["info"]["title"]
+                title = self.music_queue[0]["info"]["title"]
                 await ctx.send(f"Resumed {title}...", delete_after=10.0, silent=True)
         else:
             await ctx.send(f"No song is currently paused/playing", delete_after=10.0, silent=True)
