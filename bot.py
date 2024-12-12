@@ -297,6 +297,7 @@ class MusicCog(cmds.Cog, name="Music"):
 
             if await no_next_song(): return
 
+            # TODO: Actually try to download the song! we assume its cached rn... which is not always correct!
             next_song = self.music_queue[0]
             title: str = next_song['info']['title']
             id: str = next_song['info']['id']
