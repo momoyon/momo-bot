@@ -7,3 +7,4 @@ bot.pipe
 *.env
 .dmypy.json
 cookies.txt
+*.~
