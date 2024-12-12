@@ -247,7 +247,7 @@ class MusicCog(cmds.Cog, name="Music"):
 
                 self.music_queue.insert(0, {"info": info_dict, "link": link})
 
-                await self.play_audio(self, ctx, player, title, id)
+                await self.play_audio(ctx, player, title, id)
 
     @cmds.command("stop", help="Stops the currently playing song, if any.")
     async def stop(self, ctx):
