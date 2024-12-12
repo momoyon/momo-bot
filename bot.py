@@ -122,13 +122,11 @@ class MusicCog(cmds.Cog, name="Music"):
     def __init__(self, bot):
         self.bot = bot
         yt_dlp_options = {
-            "outtmpl": f"{self.DOWNLOAD_PATH}%(id)s.mp3",
             "format": "bestaudio",
             "cookiefile": "cookies.txt",
             # "extract_audio": True,
             "windowsfilenames": False,
             "overwrites": True,
-            "cachedir": f"{self.DOWNLOAD_PATH}/cache",
             # "default_search": "auto",
             # "no_warnings": True,
             # "quiet": True,
@@ -143,7 +141,6 @@ class MusicCog(cmds.Cog, name="Music"):
         await ctx.send(f"Playing '{title}'...", silent=True)
 
         try:
-            # src = f"{self.DOWNLOAD_PATH}{id}.mp3"
             player.play(FFmpegPCMAudio(info_dict["url"], **FFMPEG_OPTS))
         except Exception as err:
             await ctx.send(f"ERROR: Failed to play {title}: {err}", silent=True)
