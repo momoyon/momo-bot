@@ -121,8 +121,6 @@ class MiscCog(cmds.Cog, name="Miscellaneous"):
 class MusicCog(cmds.Cog, name="Music"):
     def __init__(self, bot):
         self.bot = bot
-        self.DOWNLOAD_PATH = "./songs/"
-        self.DOWNLOAD_ARCHIVE_PATH = f".download_archive"
         yt_dlp_options = {
             "outtmpl": f"{self.DOWNLOAD_PATH}%(id)s.mp3",
             "format": "bestaudio",
@@ -139,46 +137,18 @@ class MusicCog(cmds.Cog, name="Music"):
         self.music_queue : List[dict] = []
         self.ytdlp = yt_dlp.YoutubeDL(yt_dlp_options)
 
-    async def play_audio(self, ctx, player, title: str, id: str):
+    async def play_audio(self, ctx, player: ds.VoiceClient, info_dict):
+        title: str = info_dict['title']
         log_info(f"Playing '{title}'...")
         await ctx.send(f"Playing '{title}'...", silent=True)
 
         try:
-            src = f"{self.DOWNLOAD_PATH}{id}.mp3"
-            player.play(FFmpegPCMAudio(src, **FFMPEG_OPTS))
+            # src = f"{self.DOWNLOAD_PATH}{id}.mp3"
+            player.play(FFmpegPCMAudio(info_dict["url"], **FFMPEG_OPTS))
         except Exception as err:
             await ctx.send(f"ERROR: Failed to play {title}: {err}", silent=True)
             log_error(f"{err}")
             return
-
-
-    # TODO: check if file exists in disk
-    def is_video_downloaded(self, id: str) -> bool:
-        checking_id = id
-        try:
-            with open(self.DOWNLOAD_ARCHIVE_PATH) as f:
-                for line in f.read().split('\n'):
-                    if line.split(' ')[0] == checking_id:
-                        return True
-            return False
-
-        except Exception:
-            with open(self.DOWNLOAD_ARCHIVE_PATH, 'w') as f:
-                pass
-            log_info(f"Created download_archive: {self.DOWNLOAD_ARCHIVE_PATH}")
-            return False
-
-    def download(self, link: str, title: str, id: str) -> bool:
-        log_info(f"Trying to download '{link}'")
-        try:
-            self.ytdlp.download(link)
-        except yt_dlp.utils.DownloadError:
-            log_error(f"Invalid youtube link '{link}'")
-            return False
-        with open(self.DOWNLOAD_ARCHIVE_PATH, 'a') as f:
-            f.write(f"{id} {title}\n")
-        log_info(F"Downloaded {title}...")
-        return True
 
     @cmds.command("queue", help="Lists the songs in the queue.")
     async def queue(self, ctx):
@@ -196,7 +166,7 @@ class MusicCog(cmds.Cog, name="Music"):
         await ctx.send(msg, silent=True)
 
     # TODO: Find a way to check if the supplied song is already in the queue WITHOUT querying for the video info because that takes time.
-    @cmds.command("play", help="Play youtube videos; Only certain videos are playable because i have to download the whole file to play it... (i dont have infinite storage)")
+    @cmds.command("play", help="Play youtube videos")
     async def play(self, ctx, *args):
         async with ctx.typing():
             if (len(args) < 1):
@@ -211,10 +181,11 @@ class MusicCog(cmds.Cog, name="Music"):
 
             try:
                 info_dict = self.ytdlp.extract_info(link, download=False)
-            except yt_dlp.utils.DownloadError:
+            except yt_dlp.utils.UnsupportedError:
                 log_error(f"Invalid youtube link '{link}'")
                 await ctx.send(f"ERROR: Invalid youtube link '{link}'", silent=True)
                 return
+
             id = info_dict["id"]
             title = info_dict["title"]
 
@@ -226,9 +197,9 @@ class MusicCog(cmds.Cog, name="Music"):
 
             # make the bot join vc
             if not ctx.guild.voice_client: # error would be thrown if bot already connected, this stops the error
-                player = await ctx.author.voice.channel.connect()
+                player: ds.VoiceClient = await ctx.author.voice.channel.connect()
             else:
-                player = ctx.guild.voice_client
+                player: ds.VoiceClient = ctx.guild.voice_client
 
             if player.is_playing():
                 assert(len(self.music_queue) > 0)
@@ -236,18 +207,9 @@ class MusicCog(cmds.Cog, name="Music"):
                 await ctx.send(f"Another song is already playing, added to queue", silent=True)
                 self.music_queue.append({"info": info_dict, "link": link})
             else:
-                # Download if not cached
-                if not self.is_video_downloaded(id):
-                    await ctx.send("Song is not cached, downloading...", silent=True)
-                    log_info("Song is not cached, downloading...")
-                    if not self.download(link, title, id):
-                        await ctx.send(f"ERROR: Invalid youtube link '{link}'", silent=True)
-                        log_error(f"Invalid youtube link '{link}'")
-                        return
-
                 self.music_queue.insert(0, {"info": info_dict, "link": link})
 
-                await self.play_audio(ctx, player, title, id)
+                await self.play_audio(ctx, player, info_dict)
 
     @cmds.command("stop", help="Stops the currently playing song, if any.")
     async def stop(self, ctx):
@@ -297,15 +259,12 @@ class MusicCog(cmds.Cog, name="Music"):
 
             if await no_next_song(): return
 
-            # TODO: Actually try to download the song! we assume its cached rn... which is not always correct!
             next_song = self.music_queue[0]
-            title: str = next_song['info']['title']
-            id: str = next_song['info']['id']
 
             assert ctx.guild.voice_client
             player = ctx.guild.voice_client
 
-            await self.play_audio(ctx, player, title, id)
+            await self.play_audio(ctx, player, next_song['info'])
 
     @cmds.command("pause", help="Paused the currently playing song, if any.")
     async def pause(self, ctx):
