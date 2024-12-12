@@ -304,7 +304,7 @@ class MusicCog(cmds.Cog, name="Music"):
             assert ctx.guild.voice_client
             player = ctx.guild.voice_client
 
-            await play_audio(self, ctx, player, title, id)
+            await self.play_audio(ctx, player, title, id)
 
     @cmds.command("pause", help="Paused the currently playing song, if any.")
     async def pause(self, ctx):

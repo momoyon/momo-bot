@@ -180,20 +180,20 @@ class MusicCog(cmds.Cog, name="Music"):
         log_info(F"Downloaded {title}...")
         return True
 
-        @cmds.command("queue", help="Lists the songs in the queue.")
-        async def queue(self, ctx):
-            if ctx.author == bot.user:
-                return
+    @cmds.command("queue", help="Lists the songs in the queue.")
+    async def queue(self, ctx):
+        if ctx.author == bot.user:
+            return
 
-            if len(self.music_queue) <= 0:
-                await ctx.send("Music queue is empty!", silent=True)
-                return
+        if len(self.music_queue) <= 0:
+            await ctx.send("Music queue is empty!", silent=True)
+            return
 
-            msg: str = "Music: Queue: "
-            for m in self.music_queue:
-                msg += f"\n- {m['info']['title']}"
+        msg: str = "Music: Queue: "
+        for m in self.music_queue:
+            msg += f"\n- {m['info']['title']}"
 
-            await ctx.send(msg, silent=True)
+        await ctx.send(msg, silent=True)
 
     # TODO: Find a way to check if the supplied song is already in the queue WITHOUT querying for the video info because that takes time.
     @cmds.command("play", help="Play youtube videos; Only certain videos are playable because i have to download the whole file to play it... (i dont have infinite storage)")
@@ -304,7 +304,7 @@ class MusicCog(cmds.Cog, name="Music"):
             assert ctx.guild.voice_client
             player = ctx.guild.voice_client
 
-            await play_audio(self, ctx, player, title, id)
+            await self.play_audio(ctx, player, title, id)
 
     @cmds.command("pause", help="Paused the currently playing song, if any.")
     async def pause(self, ctx):
