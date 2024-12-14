@@ -24,6 +24,7 @@ SOURCE_CODE_FILENAME="bot.stable.py"
 # TODO: Remove song from queue when current song ends; Have to !!stop to remove from queue rn.
 # TODO: Implement something on on_member_join
 # TODO: Look at 'https://github.com/yt-dlp/yt-dlp/wiki/FAQ'
+# TODO: Implement command parsing on_message_edit
 
 def log_info(msg: str):
     logger.info(msg)
