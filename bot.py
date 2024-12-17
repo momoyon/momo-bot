@@ -43,6 +43,7 @@ class MiscCog(cmds.Cog, name="Miscellaneous"):
         embed.description = f"Error: {error}"
 
         embed.description += f"\nUsage: {ctx.command.usage}"
+        my_logging.bot_error(f"{self.qualified_name}Cog :: {type(error)}")
         await ctx.send(embed=embed)
 
     @cmds.command("swapcase", help="Inverts the case of the input.", usage="swap <text>")
@@ -117,9 +118,9 @@ class MusicCog(cmds.Cog, name="Music"):
             embed.description = f"Error: That is not a valid youtube link!"
         else:
             embed.description = f"Error: {error}"
-        embed.description += f"\nUsage: {ctx.command.usage}"
 
-        my_logging.bot_error(f"{self.qualified_name} :: {type(error)}")
+        embed.description += f"\nUsage: {ctx.command.usage}"
+        my_logging.bot_error(f"{self.qualified_name}Cog :: {type(error)}")
         await ctx.send(embed=embed)
 
     async def play_audio(self, ctx, player: ds.VoiceClient, info_dict):
@@ -275,24 +276,52 @@ class TouhouCog(cmds.Cog, name='Touhou'):
                 'https://media.tenor.com/v5oS9ZOVq0cAAAAM/marisa-kirisame-touhou.gif',
         ]
 
+    async def cog_command_error(self, ctx: cmds.Context, error: Exception) -> None:
+        assert type(ctx.command) == cmds.Command
 
-    @cmds.command("marisad", help="Marisa. 1% Chance for something special :D")
-    async def marisad(self, ctx):
+        embed = ds.Embed(title="Error")
+        embed.description = ""
+        if isinstance(error, cmds.CommandInvokeError):
+            error = error.original
+
+        embed.description += f"\nUsage: {ctx.command.usage}"
+        my_logging.bot_error(f"{self.qualified_name}Cog :: {type(error)}")
+        await ctx.send(embed=embed)
+
+
+    @cmds.command("marisad", help="Marisa. 1% Chance for something special :D", usage="marisad")
+    async def marisad(self, ctx: cmds.Context) -> None:
         # TODO: Make it so we dynamically search "marisad" on tenor and pick a random link
         if ctx.author == bot.user:
             return
         async with ctx.typing():
             if random.random() <= 0.1:
-                await ctx.send('https://cdn.discordapp.com/attachments/906230633540485164/1316329779624153118/caption.gif?ex=675aa723&is=675955a3&hm=1826753181d4dc7bb5bd79442b2a74b824fee9b7c03ea1242a5386612e3e74aa&')
+                await ctx.send('https://tenor.com/view/bouncing-marisa-fumo-marisa-kirisame-touhou-fumo-gif-16962360816851147092')
             else:
                 await ctx.send(random.choice(self.MARISAD_GIFS))
-
 
 class DevCog(cmds.Cog, name='Dev'):
     def __init__(self, bot):
         self.bot = bot
 
-    @cmds.command("kys", help="I will KYS :)")
+    async def cog_check(self, ctx: cmds.Context): # type: ignore
+        MOMOYON_USER_ID: int = int(os.environ["MOMOYON_USER_ID"])
+        return ctx.author.id == MOMOYON_USER_ID
+
+    async def cog_command_error(self, ctx: cmds.Context, error: Exception) -> None:
+        assert type(ctx.command) == cmds.Command
+        embed = ds.Embed(title="Error")
+        if isinstance(error, cmds.CommandInvokeError):
+            error = error.original
+        embed.description = f"Error: {error}"
+
+        embed.description += f"\nUsage: {ctx.command.usage}"
+        momoyon: ds.User = await bot.fetch_user(int(os.environ["MOMOYON_USER_ID"]))
+        await ctx.send(f"Only {momoyon.mention} can use dev commands")
+        my_logging.bot_error(f"{self.qualified_name}Cog :: {type(error)}")
+        await ctx.send(embed=embed)
+
+    @cmds.command("kys", help="I will KYS :)", usage="kys")
     async def kys(self, ctx):
         KYS_REPONSES = [
                 "Wai-",
@@ -301,9 +330,6 @@ class DevCog(cmds.Cog, name='Dev'):
                 "AARGh-",
                 ":skull:",
         ]
-        if ctx.author.name != '.momoyon':
-            await ctx.send("What about *YOU* kys?")
-            return
         await ctx.send(random.choice(KYS_REPONSES))
         await ctx.bot.close()
 
