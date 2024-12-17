@@ -8,3 +8,4 @@ bot.pipe
 .dmypy.json
 cookies.txt
 *~
+mypy.sh
