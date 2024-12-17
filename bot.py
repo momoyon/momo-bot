@@ -181,10 +181,7 @@ class MusicCog(cmds.Cog, name="Music"):
                     return
 
             # make the bot join vc
-            if not ctx.guild.voice_client: # error would be thrown if bot already connected, this stops the error
-                player: ds.VoiceClient = await ctx.author.voice.channel.connect()
-            else:
-                player: ds.VoiceClient = ctx.guild.voice_client
+            player: ds.VoiceClient = ctx.guild.voice_client if ctx.guild.voice_client else await ctx.author.voice.channel.connect()
 
             if player.is_playing():
                 assert(len(self.music_queue) > 0)
@@ -210,7 +207,7 @@ class MusicCog(cmds.Cog, name="Music"):
             else:
                 await ctx.send("Playing next song in queue...", silent=True)
                 next_song_link = self.music_queue[0]["link"]
-                await play(self, ctx, next_song_link)
+                await self.play(ctx, next_song_link)
         else:
             await ctx.send(f"No song is playing!", silent=True)
 
