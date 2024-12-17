@@ -38,11 +38,17 @@ class MiscCog(cmds.Cog, name="Miscellaneous"):
     def __init__(self, bot):
         self.bot = bot
 
-    @cmds.command("swapcase", help="Inverts the case of the input.")
+    async def cog_command_error(self, ctx: cmds.Context, error: Exception) -> None:
+        embed = ds.Embed(title="Error")
+        if isinstance(error, cmds.CommandInvokeError):
+            error = error.original
+        embed.description = f"Error: {error}\nUsage: {ctx.command.usage}"
+        await ctx.send(embed=embed)
+
+    @cmds.command("swapcase", help="Inverts the case of the input.", usage="swap <text>")
     async def swapcase(self, ctx: cmds.Context, *, text: swap_case):
         if ctx.author == bot.user:
             return
-
         await ctx.send(text)
 
     @cmds.command("ping", help="Command for testing if the bot is online; bot should reply with 'pong!'")
