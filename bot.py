@@ -13,13 +13,10 @@ my_logging.init()
 
 MIN_HTTP_BODY_LEN=2000
 
-# TODO: Get this file's name dynamically instead of hardcoding.
-SOURCE_CODE_FILENAME="bot.stable.py"
+SOURCE_CODE_FILENAME=f"{os.path.splitext(os.path.basename(__file__))[0]}.stable.py"
 
-# TODO: Use Context.current_parameter, etc for parsing of arguments
 # TODO: Remove song from queue when current song ends; Have to !!stop to remove from queue rn.
 # TODO: Implement something on on_member_join
-# TODO: Look at 'https://github.com/yt-dlp/yt-dlp/wiki/FAQ'
 # TODO: Implement command parsing on_message_edit
 
 # Helpers
