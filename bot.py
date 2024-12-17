@@ -69,14 +69,6 @@ class MiscCog(cmds.Cog, name="Miscellaneous"):
                 my_logging.bot_info(f"Length of '{SOURCE_CODE_FILENAME}': {filesize}")
                 f.seek(0)
 
-                # Send file in chunks as a message
-                # await ctx.send("`", silent=True)
-                # while f.tell() < filesize:
-                #     chunk: str = f.read(MIN_HTTP_BODY_LEN).decode('utf-8')
-                #     my_logging.bot_info(f"Read {len(chunk)} bytes")
-                #     await ctx.send(chunk, silent=True)
-                # await ctx.send("`", silent=True)
-
                 # Send the whole file as a file
                 file = ds.File(f, filename=SOURCE_CODE_FILENAME)
                 await ctx.send(file=file)
@@ -115,19 +107,29 @@ class MusicCog(cmds.Cog, name="Music"):
         self.music_queue : List[dict] = []
         self.ytdlp = yt_dlp.YoutubeDL(yt_dlp_options)
 
+    async def cog_command_error(self, ctx: cmds.Context, error: Exception) -> None:
+        assert type(ctx.command) == cmds.Command
+
+        embed = ds.Embed(title="Error")
+        if isinstance(error, cmds.CommandInvokeError):
+            error = error.original
+        if isinstance(error, yt_dlp.utils.UnsupportedError) or isinstance(error, yt_dlp.utils.DownloadError):
+            embed.description = f"Error: That is not a valid youtube link!"
+        else:
+            embed.description = f"Error: {error}"
+        embed.description += f"\nUsage: {ctx.command.usage}"
+
+        my_logging.bot_error(f"{self.qualified_name} :: {type(error)}")
+        await ctx.send(embed=embed)
+
     async def play_audio(self, ctx, player: ds.VoiceClient, info_dict):
         title: str = info_dict['title']
         my_logging.bot_info(f"Playing '{title}'...")
         await ctx.send(f"Playing '{title}'...", silent=True)
 
-        try:
-            player.play(FFmpegPCMAudio(info_dict["url"], options="-vn"))
-        except Exception as err:
-            await ctx.send(f"ERROR: Failed to play {title}: {err}", silent=True)
-            my_logging.bot_error(f"{err}")
-            return
+        player.play(FFmpegPCMAudio(info_dict["url"], options="-vn"))
 
-    @cmds.command("queue", help="Lists the songs in the queue.")
+    @cmds.command("queue", help="Lists the songs in the queue.", usage="queue")
     async def queue(self, ctx):
         if ctx.author == bot.user:
             return
@@ -143,25 +145,14 @@ class MusicCog(cmds.Cog, name="Music"):
         await ctx.send(msg, silent=True)
 
     # TODO: Find a way to check if the supplied song is already in the queue WITHOUT querying for the video info because that takes time.
-    @cmds.command("play", help="Play youtube videos")
-    async def play(self, ctx, *args):
+    @cmds.command("play", help="Play youtube videos", usage="play <youtube-link>")
+    async def play(self, ctx, link: str):
         async with ctx.typing():
-            if (len(args) < 1):
-                await ctx.send("ERROR: Please provide the youtube link of the song!", silent=True)
-                return
-
-            link = args[0]
-
             if not ctx.author.voice:
                 await ctx.send("Please join a Voice Channel and run the command!", silent=True)
                 return
 
-            try:
-                info_dict = self.ytdlp.extract_info(link, download=False)
-            except yt_dlp.utils.UnsupportedError:
-                my_logging.bot_error(f"Invalid youtube link '{link}'")
-                await ctx.send(f"ERROR: Invalid youtube link '{link}'", silent=True)
-                return
+            info_dict = self.ytdlp.extract_info(link, download=False)
 
             id = info_dict["id"]
             title = info_dict["title"]
@@ -185,7 +176,7 @@ class MusicCog(cmds.Cog, name="Music"):
 
                 await self.play_audio(ctx, player, info_dict)
 
-    @cmds.command("stop", help="Stops the currently playing song, if any.")
+    @cmds.command("stop", help="Stops the currently playing song, if any.", usage="stop")
     async def stop(self, ctx):
         if ctx.guild.voice_client:
             ctx.guild.voice_client.stop()
@@ -240,7 +231,7 @@ class MusicCog(cmds.Cog, name="Music"):
 
             await self.play_audio(ctx, player, next_song['info'])
 
-    @cmds.command("pause", help="Paused the currently playing song, if any.")
+    @cmds.command("pause", help="Paused the currently playing song, if any.", usage="pause")
     async def pause(self, ctx):
         if ctx.guild.voice_client:
             assert(len(self.music_queue) > 0)
@@ -253,7 +244,7 @@ class MusicCog(cmds.Cog, name="Music"):
         else:
             await ctx.send(f"No song is currently playing", delete_after=10.0, silent=True)
 
-    @cmds.command("resume", help="Resumes the currently paused song, if any.")
+    @cmds.command("resume", help="Resumes the currently paused song, if any.", usage="resume")
     async def resume(self, ctx):
         if ctx.guild.voice_client:
             # Disconnect from VC instead of asserting
@@ -266,7 +257,6 @@ class MusicCog(cmds.Cog, name="Music"):
                 await ctx.send(f"Resumed {title}...", delete_after=10.0, silent=True)
         else:
             await ctx.send(f"No song is currently paused/playing", delete_after=10.0, silent=True)
-
 
 class TouhouCog(cmds.Cog, name='Touhou'):
     def __init__(self, bot):
