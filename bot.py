@@ -30,34 +30,34 @@ intents.message_content = True
 
 bot = cmds.Bot('!!', intents=intents)
 
-def swap_case(text: str) -> str:
-    return text.swapcase()
-
 # COGS ###########################################
 class MiscCog(cmds.Cog, name="Miscellaneous"):
     def __init__(self, bot):
         self.bot = bot
 
     async def cog_command_error(self, ctx: cmds.Context, error: Exception) -> None:
+        assert type(ctx.command) == cmds.Command
         embed = ds.Embed(title="Error")
         if isinstance(error, cmds.CommandInvokeError):
             error = error.original
-        embed.description = f"Error: {error}\nUsage: {ctx.command.usage}"
+        embed.description = f"Error: {error}"
+
+        embed.description += f"\nUsage: {ctx.command.usage}"
         await ctx.send(embed=embed)
 
     @cmds.command("swapcase", help="Inverts the case of the input.", usage="swap <text>")
-    async def swapcase(self, ctx: cmds.Context, *, text: swap_case):
+    async def swapcase(self, ctx: cmds.Context, *, text: str):
         if ctx.author == bot.user:
             return
-        await ctx.send(text)
+        await ctx.send(text.swapcase())
 
-    @cmds.command("ping", help="Command for testing if the bot is online; bot should reply with 'pong!'")
+    @cmds.command("ping", help="Command for testing if the bot is online; bot should reply with 'pong!'", usage="ping")
     async def ping(self, ctx):
         if ctx.author == bot.user:
             return
         await ctx.channel.send("pong!")
 
-    @cmds.command("src", help="Prints the source code for this bot.")
+    @cmds.command("src", help="Prints the source code for this bot.", usage="src")
     async def src(self, ctx):
         if ctx.author == bot.user:
             return
@@ -85,41 +85,18 @@ class MiscCog(cmds.Cog, name="Miscellaneous"):
             my_logging.bot_info("Please run build.sh to copy bot.py -> bot.stable.py")
             await ctx.send("ERROR: It seems like i was deployed improperly...", silent=True)
 
-
-
-    @cmds.command("poop", help="Command for testing if the bot is online; bot should reply with 'pong!'")
+    @cmds.command("poop", help="Hehe poop.", usage="poop")
     async def poop(self, ctx):
         if ctx.author == bot.user:
             return
         await ctx.reply("Shit yourself nigger")
 
-    @cmds.command("av", help="Displays the given user's avatar.")
-    async def av(self, ctx, *args):
+    @cmds.command("av", help="Displays the given user's avatar.", usage="av <member>")
+    async def av(self, ctx, member: ds.Member):
         if ctx.author == bot.user:
             return
-        if len(args) < 1:
-            await ctx.send("ERROR: Please provide the user to display the avatar!", delete_after=5.0, silent=True)
-            return
 
-        user_id = args[0]
-
-        # renove non-digits
-        user_id = user_id.removeprefix('<')
-        user_id = user_id.removeprefix('@')
-        user_id = user_id.removesuffix('>')
-
-        # convert user id from str -> int
-        user_id = int(user_id)
-
-        my_logging.bot_info(f"fetching {user_id}...")
-
-        user = await bot.fetch_user(user_id)
-
-        my_logging.bot_info(f"fetched {user}")
-
-        my_logging.bot_info(f"avatar for {user}: {user.display_avatar}")
-
-        await ctx.send(user.display_avatar)
+        await ctx.send(member.display_avatar)
 
 class MusicCog(cmds.Cog, name="Music"):
     def __init__(self, bot) -> None:
