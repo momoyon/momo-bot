@@ -30,10 +30,20 @@ intents.message_content = True
 
 bot = cmds.Bot('!!', intents=intents)
 
+def swap_case(text: str) -> str:
+    return text.swapcase()
+
 # COGS ###########################################
 class MiscCog(cmds.Cog, name="Miscellaneous"):
     def __init__(self, bot):
         self.bot = bot
+
+    @cmds.command("swapcase", help="Inverts the case of the input.")
+    async def swapcase(self, ctx: cmds.Context, *, text: swap_case):
+        if ctx.author == bot.user:
+            return
+
+        await ctx.send(text)
 
     @cmds.command("ping", help="Command for testing if the bot is online; bot should reply with 'pong!'")
     async def ping(self, ctx):
@@ -60,7 +70,6 @@ class MiscCog(cmds.Cog, name="Miscellaneous"):
                 #     my_logging.bot_info(f"Read {len(chunk)} bytes")
                 #     await ctx.send(chunk, silent=True)
                 # await ctx.send("`", silent=True)
-
 
                 # Send the whole file as a file
                 file = ds.File(f, filename=SOURCE_CODE_FILENAME)
