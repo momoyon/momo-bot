@@ -6,14 +6,10 @@ import yt_dlp
 from typing import *
 from dotenv import load_dotenv
 import asyncio
-import coloredlogs, logging
 
-# Init Logging
-logging.basicConfig(level=logging.INFO)
-coloredlogs.install(level=logging.INFO)
-logger: logging.Logger = logging.getLogger("bot")
+import my_logging
 
-FFMPEG_OPTS = {'options': '-vn'}
+my_logging.init()
 
 MIN_HTTP_BODY_LEN=2000
 
@@ -25,15 +21,6 @@ SOURCE_CODE_FILENAME="bot.stable.py"
 # TODO: Implement something on on_member_join
 # TODO: Look at 'https://github.com/yt-dlp/yt-dlp/wiki/FAQ'
 # TODO: Implement command parsing on_message_edit
-
-def log_info(msg: str):
-    logger.info(msg)
-
-def log_error(msg: str):
-    logger.error(msg)
-
-def log_debug(msg: str):
-    logger.debug(msg)
 
 # Helpers
 intents = ds.Intents.default()
@@ -62,15 +49,15 @@ class MiscCog(cmds.Cog, name="Miscellaneous"):
         try:
             with open(SOURCE_CODE_FILENAME, 'rb') as f:
                 f.seek(0, os.SEEK_END)
-                filesize: int = f.tell()
-                log_info(f"Length of '{SOURCE_CODE_FILENAME}': {filesize}")
+                filesize = f.tell()
+                my_logging.bot_info(f"Length of '{SOURCE_CODE_FILENAME}': {filesize}")
                 f.seek(0)
 
                 # Send file in chunks as a message
                 # await ctx.send("`", silent=True)
                 # while f.tell() < filesize:
                 #     chunk: str = f.read(MIN_HTTP_BODY_LEN).decode('utf-8')
-                #     log_info(f"Read {len(chunk)} bytes")
+                #     my_logging.bot_info(f"Read {len(chunk)} bytes")
                 #     await ctx.send(chunk, silent=True)
                 # await ctx.send("`", silent=True)
 
@@ -79,8 +66,8 @@ class MiscCog(cmds.Cog, name="Miscellaneous"):
                 file = ds.File(f, filename=SOURCE_CODE_FILENAME)
                 await ctx.send(file=file)
         except FileNotFoundError:
-            log_error(f"File '{SOURCE_CODE_FILENAME}' doesn't exist!")
-            log_info("Please run build.sh to copy bot.py -> bot.stable.py")
+            my_logging.bot_error(f"File '{SOURCE_CODE_FILENAME}' doesn't exist!")
+            my_logging.bot_info("Please run build.sh to copy bot.py -> bot.stable.py")
             await ctx.send("ERROR: It seems like i was deployed improperly...", silent=True)
 
 
@@ -109,20 +96,20 @@ class MiscCog(cmds.Cog, name="Miscellaneous"):
         # convert user id from str -> int
         user_id = int(user_id)
 
-        log_info(f"fetching {user_id}...")
+        my_logging.bot_info(f"fetching {user_id}...")
 
-        user: user = await bot.fetch_user(user_id)
+        user = await bot.fetch_user(user_id)
 
-        log_info(f"fetched {user}")
+        my_logging.bot_info(f"fetched {user}")
 
-        log_info(f"avatar for {user}: {user.display_avatar}")
+        my_logging.bot_info(f"avatar for {user}: {user.display_avatar}")
 
         await ctx.send(user.display_avatar)
 
 class MusicCog(cmds.Cog, name="Music"):
-    def __init__(self, bot):
+    def __init__(self, bot) -> None:
         self.bot = bot
-        yt_dlp_options = {
+        yt_dlp_options: yt_dlp.YDLOpts = {
             "format": "bestaudio",
             "cookiefile": "cookies.txt",
             # "extract_audio": True,
@@ -131,21 +118,21 @@ class MusicCog(cmds.Cog, name="Music"):
             # "default_search": "auto",
             # "no_warnings": True,
             # "quiet": True,
-            "logger": logging.getLogger("yt_dlp")
+            "logger": my_logging.logging.getLogger("yt_dlp")
         }
         self.music_queue : List[dict] = []
         self.ytdlp = yt_dlp.YoutubeDL(yt_dlp_options)
 
     async def play_audio(self, ctx, player: ds.VoiceClient, info_dict):
         title: str = info_dict['title']
-        log_info(f"Playing '{title}'...")
+        my_logging.bot_info(f"Playing '{title}'...")
         await ctx.send(f"Playing '{title}'...", silent=True)
 
         try:
-            player.play(FFmpegPCMAudio(info_dict["url"], **FFMPEG_OPTS))
+            player.play(FFmpegPCMAudio(info_dict["url"], options="-vn"))
         except Exception as err:
             await ctx.send(f"ERROR: Failed to play {title}: {err}", silent=True)
-            log_error(f"{err}")
+            my_logging.bot_error(f"{err}")
             return
 
     @cmds.command("queue", help="Lists the songs in the queue.")
@@ -180,7 +167,7 @@ class MusicCog(cmds.Cog, name="Music"):
             try:
                 info_dict = self.ytdlp.extract_info(link, download=False)
             except yt_dlp.utils.UnsupportedError:
-                log_error(f"Invalid youtube link '{link}'")
+                my_logging.bot_error(f"Invalid youtube link '{link}'")
                 await ctx.send(f"ERROR: Invalid youtube link '{link}'", silent=True)
                 return
 
@@ -253,7 +240,7 @@ class MusicCog(cmds.Cog, name="Music"):
                     ctx.voice_client.stop()
 
             current_song = self.music_queue.pop(0)['info']['title']
-            log_info(f"Stopped playing {current_song}")
+            my_logging.bot_info(f"Stopped playing {current_song}")
 
             if await no_next_song(): return
 
@@ -345,7 +332,7 @@ class DevCog(cmds.Cog, name='Dev'):
 
 @bot.event
 async def on_ready():
-    log_info(f'{bot.user} logged in!')
+    my_logging.bot_info(f'{bot.user} logged in!')
 
 @bot.event
 async def on_message(msg):
@@ -353,7 +340,7 @@ async def on_message(msg):
         return
 
     # TODO: Handle msg.guild == None case
-    log_info(f"[{msg.created_at}][{msg.guild.name}::{msg.channel.name}] {msg.author}: '{msg.content}'")
+    my_logging.bot_info(f"[{msg.created_at}][{msg.guild.name}::{msg.channel.name}] {msg.author}: '{msg.content}'")
     await bot.process_commands(msg)
 
 async def add_cogs():
