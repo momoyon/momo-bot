@@ -81,13 +81,16 @@ class MiscCog(cmds.Cog, name="Miscellaneous"):
             return
         await ctx.reply("Shit yourself nigger")
 
-    @cmds.command("av", help="Displays the given user's avatar.", usage="av <member>")
-    async def av(self, ctx, member: ds.Member):
+    @cmds.command("av", help="Displays the given user's avatar.", usage="av <member> [server_avatar = false]")
+    async def av(self, ctx, member: ds.Member, server_avatar: bool = false):
         if ctx.author == bot.user:
             return
 
-        await ctx.send(member.display_avatar)
-
+        if server_avatar:
+            await ctx.send(member.display_avatar)
+        else:
+            await ctx.send(member.avatar)
+    
 class MusicCog(cmds.Cog, name="Music"):
     def __init__(self, bot) -> None:
         self.bot = bot
