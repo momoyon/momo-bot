@@ -1,9 +1,9 @@
 import discord as ds
 from discord import FFmpegPCMAudio
 import discord.ext.commands as cmds
-import sys, time, os, random
+import os, random
 import yt_dlp
-from typing import *
+from typing import List
 from dotenv import load_dotenv
 import asyncio
 
@@ -14,6 +14,8 @@ my_logging.init()
 MIN_HTTP_BODY_LEN=2000
 
 SOURCE_CODE_FILENAME=f"{os.path.splitext(os.path.basename(__file__))[0]}.stable.py"
+
+MOMOYON_USER_ID=610964132899848208
 
 # TODO: Remove song from queue when current song ends; Have to !!stop to remove from queue rn.
 # TODO: Implement something on on_member_join
@@ -94,7 +96,7 @@ class MiscCog(cmds.Cog, name="Miscellaneous"):
 class MusicCog(cmds.Cog, name="Music"):
     def __init__(self, bot) -> None:
         self.bot = bot
-        yt_dlp_options: yt_dlp.YDLOpts = {
+        yt_dlp_options = {
             "format": "bestaudio",
             "cookiefile": "cookies.txt",
             # "extract_audio": True,
@@ -155,7 +157,6 @@ class MusicCog(cmds.Cog, name="Music"):
 
             info_dict = self.ytdlp.extract_info(link, download=False)
 
-            id = info_dict["id"]
             title = info_dict["title"]
 
             # The song is in the queue
@@ -305,7 +306,6 @@ class DevCog(cmds.Cog, name='Dev'):
         self.bot = bot
 
     async def cog_check(self, ctx: cmds.Context): # type: ignore
-        MOMOYON_USER_ID: int = int(os.environ["MOMOYON_USER_ID"])
         return ctx.author.id == MOMOYON_USER_ID
 
     async def cog_command_error(self, ctx: cmds.Context, error: Exception) -> None:
@@ -353,7 +353,6 @@ async def on_message(msg):
         for attachment in msg.attachments:
             text += "\n"
             text += f"{attachment.content_type}: {attachment.url}"
-            
     else:
         if len(msg.attachments) > 0:
             text += "Sent attachment(s):"
@@ -367,17 +366,27 @@ async def on_message(msg):
     await bot.process_commands(msg)
 
 async def add_cogs():
-    await bot.add_cog(MiscCog(bot))
-    await bot.add_cog(MusicCog(bot))
-    await bot.add_cog(TouhouCog(bot))
-    await bot.add_cog(DevCog(bot))
+    coroutines = []
+    coroutines.append(bot.add_cog(MiscCog(bot)))
+    coroutines.append(bot.add_cog(MusicCog(bot)))
+    coroutines.append(bot.add_cog(TouhouCog(bot)))
+    coroutines.append(bot.add_cog(DevCog(bot)))
 
-def main():
-    asyncio.run(add_cogs())
+    tasks = [asyncio.create_task(coroutine) for coroutine in coroutines]
+
+    await asyncio.gather(*tasks)
+
+async def main():
+    await add_cogs()
 
     load_dotenv()
     token = os.environ["TOKEN"]
-    bot.run(token, log_handler=None)
+
+    tasks = []
+    tasks.append(asyncio.create_task(bot.login(token)))
+    tasks.append(asyncio.create_task(bot.connect()))
+
+    await asyncio.gather(*tasks)
 
 if __name__ == '__main__':
-    main()
+    asyncio.run(main())
