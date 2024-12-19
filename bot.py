@@ -9,6 +9,8 @@ import asyncio
 
 import my_logging
 
+import bot_com
+
 my_logging.init()
 
 MIN_HTTP_BODY_LEN=2000
@@ -385,6 +387,9 @@ async def main():
     tasks = []
     tasks.append(asyncio.create_task(bot.login(token)))
     tasks.append(asyncio.create_task(bot.connect()))
+
+    com = bot_com.BotCom('bot.com')
+    tasks.append(com.start())
 
     await asyncio.gather(*tasks)
 
