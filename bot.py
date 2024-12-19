@@ -3,7 +3,7 @@ from discord import FFmpegPCMAudio
 import discord.ext.commands as cmds
 import os, random
 import yt_dlp
-from typing import List
+from typing import List, Any
 from dotenv import load_dotenv
 import asyncio
 
@@ -158,6 +158,7 @@ class MusicCog(cmds.Cog, name="Music"):
                 return
 
             info_dict = self.ytdlp.extract_info(link, download=False)
+            assert type(info_dict) == dict[str, Any]
 
             title = info_dict["title"]
 
