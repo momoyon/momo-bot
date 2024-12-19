@@ -376,12 +376,17 @@ async def add_cogs():
 
     await asyncio.gather(*tasks)
 
-def main():
-    asyncio.run(add_cogs())
+async def main():
+    await add_cogs()
 
     load_dotenv()
     token = os.environ["TOKEN"]
-    bot.run(token, log_handler=None)
+
+    tasks = []
+    tasks.append(asyncio.create_task(bot.login(token)))
+    tasks.append(asyncio.create_task(bot.connect()))
+
+    await asyncio.gather(*tasks)
 
 if __name__ == '__main__':
-    main()
+    asyncio.run(main())
