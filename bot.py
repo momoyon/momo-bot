@@ -1,9 +1,9 @@
 import discord as ds
 from discord import FFmpegPCMAudio
 import discord.ext.commands as cmds
-import sys, time, os, random
+import os, random
 import yt_dlp
-from typing import *
+from typing import List
 from dotenv import load_dotenv
 import asyncio
 
@@ -94,7 +94,7 @@ class MiscCog(cmds.Cog, name="Miscellaneous"):
 class MusicCog(cmds.Cog, name="Music"):
     def __init__(self, bot) -> None:
         self.bot = bot
-        yt_dlp_options: yt_dlp.YDLOpts = {
+        yt_dlp_options = {
             "format": "bestaudio",
             "cookiefile": "cookies.txt",
             # "extract_audio": True,
@@ -155,7 +155,6 @@ class MusicCog(cmds.Cog, name="Music"):
 
             info_dict = self.ytdlp.extract_info(link, download=False)
 
-            id = info_dict["id"]
             title = info_dict["title"]
 
             # The song is in the queue
@@ -353,7 +352,6 @@ async def on_message(msg):
         for attachment in msg.attachments:
             text += "\n"
             text += f"{attachment.content_type}: {attachment.url}"
-            
     else:
         if len(msg.attachments) > 0:
             text += "Sent attachment(s):"
@@ -366,6 +364,7 @@ async def on_message(msg):
 
     await bot.process_commands(msg)
 
+# TODO: Use tasks and start waiting on add_cog at once
 async def add_cogs():
     await bot.add_cog(MiscCog(bot))
     await bot.add_cog(MusicCog(bot))
