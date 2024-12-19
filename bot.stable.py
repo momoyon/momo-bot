@@ -345,7 +345,25 @@ async def on_message(msg):
         return
 
     # TODO: Handle msg.guild == None case
-    my_logging.bot_info(f"[{msg.created_at}][{msg.guild.name}::{msg.channel.name}] {msg.author}: '{msg.content}'")
+    text: str = f"[{msg.created_at}][{msg.guild.name}::{msg.channel.name}] {msg.author}: "
+    if len(msg.content) > 0:
+        text += f"'{msg.content}'"
+        if len(msg.attachments) > 0:
+            text += " With attachment(s):"
+        for attachment in msg.attachments:
+            text += "\n"
+            text += f"{attachment.content_type}: {attachment.url}"
+            
+    else:
+        if len(msg.attachments) > 0:
+            text += "Sent attachment(s):"
+
+            for attachment in msg.attachments:
+                text += "\n"
+                text += f"{attachment.content_type}: {attachment.url}"
+
+    my_logging.bot_info(text)
+
     await bot.process_commands(msg)
 
 async def add_cogs():

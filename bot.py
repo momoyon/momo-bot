@@ -352,7 +352,7 @@ async def on_message(msg):
             text += " With attachment(s):"
         for attachment in msg.attachments:
             text += "\n"
-            text += f"{attachment.content_type}: {attachment.filename}"
+            text += f"{attachment.content_type}: {attachment.url}"
             
     else:
         if len(msg.attachments) > 0:
@@ -360,7 +360,7 @@ async def on_message(msg):
 
             for attachment in msg.attachments:
                 text += "\n"
-                text += f"{attachment.content_type}: {attachment.filename}"
+                text += f"{attachment.content_type}: {attachment.url}"
 
     my_logging.bot_info(text)
 
