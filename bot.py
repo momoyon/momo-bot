@@ -15,6 +15,8 @@ MIN_HTTP_BODY_LEN=2000
 
 SOURCE_CODE_FILENAME=f"{os.path.splitext(os.path.basename(__file__))[0]}.stable.py"
 
+MOMOYON_USER_ID=610964132899848208
+
 # TODO: Remove song from queue when current song ends; Have to !!stop to remove from queue rn.
 # TODO: Implement something on on_member_join
 # TODO: Implement command parsing on_message_edit
@@ -304,7 +306,6 @@ class DevCog(cmds.Cog, name='Dev'):
         self.bot = bot
 
     async def cog_check(self, ctx: cmds.Context): # type: ignore
-        MOMOYON_USER_ID: int = int(os.environ["MOMOYON_USER_ID"])
         return ctx.author.id == MOMOYON_USER_ID
 
     async def cog_command_error(self, ctx: cmds.Context, error: Exception) -> None:
