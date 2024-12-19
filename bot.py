@@ -364,12 +364,16 @@ async def on_message(msg):
 
     await bot.process_commands(msg)
 
-# TODO: Use tasks and start waiting on add_cog at once
 async def add_cogs():
-    await bot.add_cog(MiscCog(bot))
-    await bot.add_cog(MusicCog(bot))
-    await bot.add_cog(TouhouCog(bot))
-    await bot.add_cog(DevCog(bot))
+    coroutines = []
+    coroutines.append(bot.add_cog(MiscCog(bot)))
+    coroutines.append(bot.add_cog(MusicCog(bot)))
+    coroutines.append(bot.add_cog(TouhouCog(bot)))
+    coroutines.append(bot.add_cog(DevCog(bot)))
+
+    tasks = [asyncio.create_task(coroutine) for coroutine in coroutines]
+
+    await asyncio.gather(*tasks)
 
 def main():
     asyncio.run(add_cogs())
