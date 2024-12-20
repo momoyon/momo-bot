@@ -389,7 +389,7 @@ async def main():
     tasks.append(asyncio.create_task(bot.login(token)))
     tasks.append(asyncio.create_task(bot.connect()))
 
-    com = bot_com.BotCom('bot.com')
+    com = bot_com.BotCom(bot, 'bot.com')
     tasks.append(com.start())
 
     await asyncio.gather(*tasks)
