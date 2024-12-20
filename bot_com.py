@@ -3,31 +3,61 @@ import logging as log
 import aiofile
 import asyncio
 import discord.ext.commands as cmds
-from typing import Callable, Any
+from typing import Callable, Any, Type
+from enum import IntEnum
 
-log.basicConfig(level=log.INFO)
+log.basicConfig(level=log.DEBUG)
 bot_com_logger: log.Logger = log.getLogger(__file__)
 
+class ParamCount(IntEnum):
+    ATLEAST = 0
+    EXACT = 1
+    NOMORE_THAN = 2
+    COUNT = 3
+
+def param_count_as_str(v: ParamCount) -> str:
+    match(v):
+        case ParamCount.ATLEAST: return "at least"
+        case ParamCount.EXACT: return "exactly"
+        case ParamCount.NOMORE_THAN: return "no more than"
+        case ParamCount.COUNT: pass
+    assert False, "This musn't run!"
+
+
 class InsufficientParamsException(Exception):
-    def __init__(self, message: str, *args: object) -> None:
-        self.message = message
+    def __init__(self, funcname: str, param_count_type: ParamCount, expected_args_count: int, *args: object) -> None:
+        self.funcname = funcname
+        self.param_count_type = param_count_type
+        self.expected_args_count = expected_args_count
         super().__init__(*args)
 
     def __repr__(self) -> str:
-        if len(self.message): return self.message
-        return super().__repr__()
+        return f"{self.funcname} expects {param_count_as_str(self.param_count_type)} {self.expected_args_count} argument(s)!"
+
+    def __str__(self) -> str:
+        return self.__repr__()
+
+class InvalidParamTypeException(Exception):
+    def __init__(self, wanted_type: Type, got_type: Type, funcname: str, *args: object) -> None:
+        self.wanted_type = wanted_type
+        self.got_type = got_type
+        self.funcname = funcname
+        super().__init__(*args)
+
+    def __repr__(self) -> str:
+        return f"{self.funcname} wanted {self.wanted_type} but got {self.got_type}"
 
     def __str__(self) -> str:
         return self.__repr__()
 
 class BotComCommand:
-    def __init__(self, name: str, callback: Callable[[Any, list[str]], None]) -> None:
+    def __init__(self, name: str, callback: Callable[[Any, list[Any]], None]) -> None:
         self.name = name
         self.callback = callback
 
 bot_com_commands: dict[str, BotComCommand] = {}
 
-def define_bot_com_command(name: str, callback: Callable[[Any, list[str]], None]) -> BotComCommand:
+def define_bot_com_command(name: str, callback: Callable[[Any, list[Any]], None]) -> BotComCommand:
     if name in bot_com_commands != None:
         bot_com_logger.debug(f"Bot command {name} is already defined!")
         return bot_com_commands[name]
@@ -35,14 +65,6 @@ def define_bot_com_command(name: str, callback: Callable[[Any, list[str]], None]
     bot_com_commands[name] = BotComCommand(name, callback)
 
     return bot_com_commands[name]
-
-def echo(bot_com: Any, params: list[str]) -> None:
-    assert(isinstance(bot_com, BotCom)), "Nigger you must pass a BotCom instance to this"
-    if len(params) <= 0:
-        raise InsufficientParamsException("echo command wants at least one parameter!")
-    print(bot_com, *params)
-
-define_bot_com_command("echo", echo)
 
 class BotCom:
     def __init__(self, bot: cmds.Bot, filename: str) -> None:
@@ -64,7 +86,6 @@ class BotCom:
                 data = data.strip()
                 data = data.removesuffix(bytes(os.linesep, "utf-8"))
                 if len(data) > 0:
-                    self.logger.info(f"Got data '{str(data)}'")
                     data_str: str = data.decode()
 
                     cmd: str = data_str.split(' ')[0]
@@ -74,6 +95,7 @@ class BotCom:
                     if cmd in bot_com_commands:
                         bot_cmd: BotComCommand = bot_com_commands[cmd]
                         try:
+                            self.logger.info(f"Running command `{cmd}`...")
                             bot_cmd.callback(self, params)
                         except Exception as e:
                             self.logger.error(str(e))
@@ -85,3 +107,16 @@ class BotCom:
 
                 await asyncio.sleep(0.1)  # Add a small delay to avoid busy-waiting
         self.logger.info("Stopped bot com")
+
+# Define Bot Com Commands
+# TODO: Find a way to make a decorator that will define a BotComCommand and add it to the map
+def echo(bot_com: Any, params: list[Any]) -> None:
+    """
+    Just echos the given parameters to the stdout. Useful for testing BotComCommand
+    """
+    assert(isinstance(bot_com, BotCom)), "Nigger you must pass a BotCom instance to this"
+    if len(params) <= 0:
+        raise InsufficientParamsException("echo", ParamCount.ATLEAST, 1)
+    print(bot_com, *params)
+define_bot_com_command("echo", echo)
+
