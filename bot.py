@@ -1,6 +1,7 @@
 import discord as ds
 from discord import FFmpegPCMAudio
 import discord.ext.commands as cmds
+import discord.ext.tasks as tasks
 import os, random
 import yt_dlp
 from typing import List, Any
@@ -342,6 +343,8 @@ class DevCog(cmds.Cog, name='Dev'):
 async def on_ready():
     my_logging.bot_info(f'{bot.user} logged in!')
 
+    for g in bot.guilds:
+        my_logging.bot_info(f"    - Bot in {g.name}")
 @bot.event
 async def on_message(msg):
     if msg.author == bot.user:
@@ -395,4 +398,7 @@ async def main():
     await asyncio.gather(*tasks)
 
 if __name__ == '__main__':
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt as ki:
+        exit(0)
