@@ -31,6 +31,13 @@ intents.members = True
 intents.message_content = True
 # intents.manage_messages = True
 
+class BotState:
+    def __init__(self, bot: cmds.Bot, spawn_guild: ds.Guild, spawn_channel: ds.TextChannel) -> None:
+        self.bot = bot
+        self.current_guild: ds.Guild = spawn_guild
+        self.current_channel: ds.TextChannel = spawn_channel
+
+bot_state: BotState | None = None
 bot = cmds.Bot('!!', intents=intents)
 bot_logger: logging.Logger = logging.getLogger("bot")
 
@@ -357,8 +364,30 @@ class DevCog(cmds.Cog, name='Dev'):
 async def on_ready():
     bot_logger.info(f'{bot.user} logged in!')
 
+    # NOTE: Hard-coded guild and channel ids of my private server...
+    SPAWN_GUILD_ID: int = 906230633540485161
+    SPAWN_CHANNEL_ID: int = 1319686983131467946
+    spawn_guild = bot.get_guild(SPAWN_GUILD_ID)
+    spawn_channel = bot.get_channel(SPAWN_CHANNEL_ID)
+
+    if spawn_channel == None:
+        bot_logger.warning(f"Spawn Channel with id'{SPAWN_CHANNEL_ID}' not found!")
+    if spawn_guild == None:
+        bot_logger.warning(f"Spawn Guild with id'{SPAWN_GUILD_ID}' not found!")
+
+    if spawn_guild != None and spawn_channel != None:
+        # We only allow TextChannels to be spawn_channel
+        if not isinstance(spawn_channel, ds.TextChannel):
+            bot_logger.error(f"Brother please choose a TextChannel as the spawn channel!")
+            return
+
+        bot_state = BotState(bot, spawn_guild, spawn_channel)
+        bot_logger.info(f"Bot spawned in '{bot_state.current_channel.name}' of guild '{bot_state.current_guild.name}'")
+        await bot_state.current_channel.send("Spawned!", delete_after=10.0)
+
+
     for g in bot.guilds:
-        bot_logger.info(f"    - Bot in {g.name}")
+        bot_logger.info(f"    - Bot in {g.name} with id {g.id}")
 
 @bot.event
 async def on_message(msg):
