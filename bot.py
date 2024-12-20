@@ -102,7 +102,7 @@ class MusicCog(cmds.Cog, name="Music"):
             # "extract_audio": True,
             "windowsfilenames": False,
             "overwrites": True,
-            # "default_search": "auto",
+            "default_search": "auto",
             # "no_warnings": True,
             # "quiet": True,
             "logger": my_logging.logging.getLogger("yt_dlp")
