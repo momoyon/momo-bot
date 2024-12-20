@@ -1,15 +1,19 @@
 import discord as ds
 from discord import FFmpegPCMAudio
 import discord.ext.commands as cmds
+import discord.ext.tasks as tasks
 import os, random
 import yt_dlp
-from typing import List
+from typing import List, Any
 from dotenv import load_dotenv
 import asyncio
 
-import my_logging
+import logging, coloredlogs
 
-my_logging.init()
+import bot_com
+
+logging.basicConfig(level=logging.INFO)
+coloredlogs.install(level=logging.INFO)
 
 MIN_HTTP_BODY_LEN=2000
 
@@ -27,7 +31,15 @@ intents.members = True
 intents.message_content = True
 # intents.manage_messages = True
 
+class BotState:
+    def __init__(self, bot: cmds.Bot, spawn_guild: ds.Guild, spawn_channel: ds.TextChannel) -> None:
+        self.bot = bot
+        self.current_guild: ds.Guild = spawn_guild
+        self.current_channel: ds.TextChannel = spawn_channel
+
+bot_state: BotState | None = None
 bot = cmds.Bot('!!', intents=intents)
+bot_logger: logging.Logger = logging.getLogger("bot")
 
 # COGS ###########################################
 class MiscCog(cmds.Cog, name="Miscellaneous"):
@@ -42,7 +54,7 @@ class MiscCog(cmds.Cog, name="Miscellaneous"):
         embed.description = f"Error: {error}"
 
         embed.description += f"\nUsage: {ctx.command.usage}"
-        my_logging.bot_error(f"{self.qualified_name}Cog :: {type(error)}")
+        bot_logger.error(f"{self.qualified_name}Cog :: {type(error)}")
         await ctx.send(embed=embed)
 
     @cmds.command("swapcase", help="Inverts the case of the input.", usage="swap <text>")
@@ -52,7 +64,7 @@ class MiscCog(cmds.Cog, name="Miscellaneous"):
         await ctx.send(text.swapcase())
 
     @cmds.command("ping", help="Command for testing if the bot is online; bot should reply with 'pong!'", usage="ping")
-    async def ping(self, ctx):
+    async def ping(self, ctx: cmds.Context):
         if ctx.author == bot.user:
             return
         await ctx.channel.send("pong!")
@@ -66,15 +78,15 @@ class MiscCog(cmds.Cog, name="Miscellaneous"):
             with open(SOURCE_CODE_FILENAME, 'rb') as f:
                 f.seek(0, os.SEEK_END)
                 filesize = f.tell()
-                my_logging.bot_info(f"Length of '{SOURCE_CODE_FILENAME}': {filesize}")
+                bot_logger.info(f"Length of '{SOURCE_CODE_FILENAME}': {filesize}")
                 f.seek(0)
 
                 # Send the whole file as a file
                 file = ds.File(f, filename=SOURCE_CODE_FILENAME)
                 await ctx.send(file=file)
         except FileNotFoundError:
-            my_logging.bot_error(f"File '{SOURCE_CODE_FILENAME}' doesn't exist!")
-            my_logging.bot_info("Please run build.sh to copy bot.py -> bot.stable.py")
+            bot_logger.error(f"File '{SOURCE_CODE_FILENAME}' doesn't exist!")
+            bot_logger.info("Please run build.sh to copy bot.py -> bot.stable.py")
             await ctx.send("ERROR: It seems like i was deployed improperly...", silent=True)
 
     @cmds.command("poop", help="Hehe poop.", usage="poop")
@@ -105,7 +117,7 @@ class MusicCog(cmds.Cog, name="Music"):
             "default_search": "auto",
             # "no_warnings": True,
             # "quiet": True,
-            "logger": my_logging.logging.getLogger("yt_dlp")
+            "logger": logging.getLogger("yt_dlp")
         }
         self.music_queue : List[dict] = []
         self.ytdlp = yt_dlp.YoutubeDL(yt_dlp_options)
@@ -122,12 +134,12 @@ class MusicCog(cmds.Cog, name="Music"):
             embed.description = f"Error: {error}"
 
         embed.description += f"\nUsage: {ctx.command.usage}"
-        my_logging.bot_error(f"{self.qualified_name}Cog :: {type(error)}")
+        bot_logger.error(f"{self.qualified_name}Cog :: {type(error)}")
         await ctx.send(embed=embed)
 
     async def play_audio(self, ctx, player: ds.VoiceClient, info_dict):
         title: str = info_dict['title']
-        my_logging.bot_info(f"Playing '{title}'...")
+        bot_logger.info(f"Playing '{title}'...")
         await ctx.send(f"Playing '{title}'...", silent=True)
 
         player.play(FFmpegPCMAudio(info_dict["url"], options="-vn"))
@@ -156,6 +168,7 @@ class MusicCog(cmds.Cog, name="Music"):
                 return
 
             info_dict = self.ytdlp.extract_info(link, download=False)
+            assert type(info_dict) == dict[str, Any]
 
             title = info_dict["title"]
 
@@ -222,7 +235,7 @@ class MusicCog(cmds.Cog, name="Music"):
                     ctx.voice_client.stop()
 
             current_song = self.music_queue.pop(0)['info']['title']
-            my_logging.bot_info(f"Stopped playing {current_song}")
+            bot_logger.info(f"Stopped playing {current_song}")
 
             if await no_next_song(): return
 
@@ -286,7 +299,7 @@ class TouhouCog(cmds.Cog, name='Touhou'):
             error = error.original
 
         embed.description += f"\nUsage: {ctx.command.usage}"
-        my_logging.bot_error(f"{self.qualified_name}Cog :: {type(error)}")
+        bot_logger.error(f"{self.qualified_name}Cog :: {type(error)}")
         await ctx.send(embed=embed)
 
 
@@ -318,7 +331,7 @@ class DevCog(cmds.Cog, name='Dev'):
         embed.description += f"\nUsage: {ctx.command.usage}"
         momoyon: ds.User = await bot.fetch_user(int(os.environ["MOMOYON_USER_ID"]))
         await ctx.send(f"Only {momoyon.mention} can use dev commands")
-        my_logging.bot_error(f"{self.qualified_name}Cog :: {type(error)}")
+        bot_logger.error(f"{self.qualified_name}Cog :: {type(error)}")
         await ctx.send(embed=embed)
 
     @cmds.command("kys", help="I will KYS :)", usage="kys")
@@ -333,11 +346,48 @@ class DevCog(cmds.Cog, name='Dev'):
         await ctx.send(random.choice(KYS_REPONSES))
         await ctx.bot.close()
 
+    @cmds.command("chan_id", help="Gets the id of the channel.", usage="chan_id")
+    async def chan_id(self, ctx: cmds.Context) -> None:
+        # TODO: Add this as a check for all commands?
+        if ctx.author == bot.user:
+            return
+        channel_name: str = "Look at the client"
+        if isinstance(ctx.channel, ds.TextChannel):
+            channel_name = ctx.channel.name
+
+        bot_logger.info(f"Channel id for '{channel_name}': {ctx.channel.id}")
+        await ctx.send(f"{ctx.channel.id}")
+
 ##################################################
 
 @bot.event
 async def on_ready():
-    my_logging.bot_info(f'{bot.user} logged in!')
+    bot_logger.info(f'{bot.user} logged in!')
+
+    # NOTE: Hard-coded guild and channel ids of my private server...
+    SPAWN_GUILD_ID: int = 906230633540485161
+    SPAWN_CHANNEL_ID: int = 1319686983131467946
+    spawn_guild = bot.get_guild(SPAWN_GUILD_ID)
+    spawn_channel = bot.get_channel(SPAWN_CHANNEL_ID)
+
+    if spawn_channel == None:
+        bot_logger.warning(f"Spawn Channel with id'{SPAWN_CHANNEL_ID}' not found!")
+    if spawn_guild == None:
+        bot_logger.warning(f"Spawn Guild with id'{SPAWN_GUILD_ID}' not found!")
+
+    if spawn_guild != None and spawn_channel != None:
+        # We only allow TextChannels to be spawn_channel
+        if not isinstance(spawn_channel, ds.TextChannel):
+            bot_logger.error(f"Brother please choose a TextChannel as the spawn channel!")
+            return
+
+        bot_state = BotState(bot, spawn_guild, spawn_channel)
+        bot_logger.info(f"Bot spawned in '{bot_state.current_channel.name}' of guild '{bot_state.current_guild.name}'")
+        await bot_state.current_channel.send("Spawned!", delete_after=10.0)
+
+
+    for g in bot.guilds:
+        bot_logger.info(f"    - Bot in {g.name} with id {g.id}")
 
 @bot.event
 async def on_message(msg):
@@ -361,7 +411,7 @@ async def on_message(msg):
                 text += "\n"
                 text += f"{attachment.content_type}: {attachment.url}"
 
-    my_logging.bot_info(text)
+    bot_logger.info(text)
 
     await bot.process_commands(msg)
 
@@ -386,7 +436,13 @@ async def main():
     tasks.append(asyncio.create_task(bot.login(token)))
     tasks.append(asyncio.create_task(bot.connect()))
 
+    com = bot_com.BotCom(bot, 'bot.com')
+    tasks.append(com.start())
+
     await asyncio.gather(*tasks)
 
 if __name__ == '__main__':
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt as ki:
+        exit(0)
