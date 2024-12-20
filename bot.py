@@ -54,7 +54,7 @@ class MiscCog(cmds.Cog, name="Miscellaneous"):
         await ctx.send(text.swapcase())
 
     @cmds.command("ping", help="Command for testing if the bot is online; bot should reply with 'pong!'", usage="ping")
-    async def ping(self, ctx):
+    async def ping(self, ctx: cmds.Context):
         if ctx.author == bot.user:
             return
         await ctx.channel.send("pong!")

@@ -23,7 +23,7 @@ def param_count_as_str(v: ParamCount) -> str:
         case ParamCount.COUNT: pass
     assert False, "This musn't run!"
 
-
+# Exceptions
 class InsufficientParamsException(Exception):
     def __init__(self, funcname: str, param_count_type: ParamCount, expected_args_count: int, *args: object) -> None:
         self.funcname = funcname
@@ -50,6 +50,7 @@ class InvalidParamTypeException(Exception):
     def __str__(self) -> str:
         return self.__repr__()
 
+# Classes
 class BotComCommand:
     def __init__(self, name: str, callback: Callable[[Any, list[Any]], None]) -> None:
         self.name = name
@@ -108,7 +109,7 @@ class BotCom:
                 await asyncio.sleep(0.1)  # Add a small delay to avoid busy-waiting
         self.logger.info("Stopped bot com")
 
-# Define Bot Com Commands
+# Defined Bot Com Commands
 # TODO: Find a way to make a decorator that will define a BotComCommand and add it to the map
 def echo(bot_com: Any, params: list[Any]) -> None:
     """
@@ -120,3 +121,22 @@ def echo(bot_com: Any, params: list[Any]) -> None:
     print(bot_com, *params)
 define_bot_com_command("echo", echo)
 
+def say(bot_com: Any, params: list[Any]) -> None:
+    """
+    Sends a message via the discord bot in the `bot_com`.
+
+    The first argument in the params is the message.
+    The second is the channel to send to.
+    """
+    assert(isinstance(bot_com, BotCom)), "Nigger you must pass a BotCom instance to this"
+    if len(params) <= 0:
+        raise InsufficientParamsException("say", ParamCount.EXACT, 2)
+    if not isinstance(params[0], str):
+        raise InvalidParamTypeException(type(str), type(params[0]), "say")
+
+    msg: str = params.pop(0)
+
+    bot: cmds.Bot = bot_com.bot
+
+    bot_com.logger.info(f"TODO: Send `{msg}` via bot")
+define_bot_com_command("say", say)
