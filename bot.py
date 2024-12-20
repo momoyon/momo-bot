@@ -337,6 +337,17 @@ class DevCog(cmds.Cog, name='Dev'):
         await ctx.send(random.choice(KYS_REPONSES))
         await ctx.bot.close()
 
+    @cmds.command("chan_id", help="Gets the id of the channel.", usage="chan_id")
+    async def chan_id(self, ctx: cmds.Context) -> None:
+        # TODO: Add this as a check for all commands?
+        if ctx.author == bot.user:
+            return
+        channel_name: str = "Look at the client"
+        if isinstance(ctx.channel, ds.TextChannel):
+            channel_name = ctx.channel.name
+
+        bot_logger.info(f"Channel id for '{channel_name}': {ctx.channel.id}")
+        await ctx.send(f"{ctx.channel.id}")
 ##################################################
 
 @bot.event
