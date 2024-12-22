@@ -36,7 +36,11 @@ def main() -> None:
 
     send(f, f"echo 'Bot Client connected!'")
     while True:
-        pass
+        try:
+            cmd: str = input("> ")
+            send(f, cmd)
+        except KeyboardInterrupt:
+            break
 
     f.close()
 

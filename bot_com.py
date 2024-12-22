@@ -103,7 +103,7 @@ class BotCom:
                     else:
                         self.logger.warning(f"Undefined command '{cmd}'")
 
-                if data == b"STOP":
+                if data == b"stop":
                     break
 
                 await asyncio.sleep(0.1)  # Add a small delay to avoid busy-waiting
@@ -118,7 +118,7 @@ def echo(bot_com: Any, params: list[Any]) -> None:
     assert(isinstance(bot_com, BotCom)), "Nigger you must pass a BotCom instance to this"
     if len(params) <= 0:
         raise InsufficientParamsException("echo", ParamCount.ATLEAST, 1)
-    print(bot_com, *params)
+    bot_com_logger.info(f" ECHO: {params}")
 define_bot_com_command("echo", echo)
 
 def say(bot_com: Any, params: list[Any]) -> None:
