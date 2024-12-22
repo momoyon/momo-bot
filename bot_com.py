@@ -2,8 +2,9 @@ import os
 import logging as log
 import aiofile
 import asyncio
+import discord
 import discord.ext.commands as cmds
-from typing import Callable, Any, Type, Coroutine
+from typing import Callable, Any, Type, Coroutine, List
 from enum import IntEnum
 
 log.basicConfig(level=log.DEBUG)
@@ -136,10 +137,6 @@ async def say(bot_com: Any, params: list[Any]):
     if not isinstance(params[0], str):
         raise InvalidParamTypeException(type(str), type(params[0]), "say")
 
-    msgs: list[str] = params
-
-    bot: cmds.Bot = bot_com.bot
-
     if not bot_com.bot_state:
         bot_com_logger.warning(f"Bot state is not initialized!")
     else:
@@ -148,5 +145,38 @@ async def say(bot_com: Any, params: list[Any]):
             args += f" {p}"
 
         await bot_com.bot_state.current_channel.send(args)
-
 define_bot_com_command("say", say)
+
+async def ls(bot_com: Any, params: list[Any]):
+    """
+    Lists all the channels in all the guilds the bot belongs.
+
+    Takes optional parameter [index] to ls only the guilds[index]'s channels.
+    """
+    assert(isinstance(bot_com, BotCom)), "Nigger you must pass a BotCom instance to this"
+
+    bot: cmds.Bot = bot_com.bot
+
+    def ls_text_channels(guild: discord.Guild) -> None:
+        for ci in range(0, len(guild.text_channels)):
+            chan: discord.TextChannel = guild.text_channels[ci]
+            print(f"       CHANNEL: [{ci:02}]->{chan.name}")
+
+
+    guild_index: int = -1
+    if len(params) > 0:
+        try:
+            guild_index = int(params.pop(0))
+        except Exception as e:
+            bot_com.logger.warning(f"Exception in `ls` command: {e}")
+
+    if guild_index >= 0:
+        guild_index = min(guild_index, len(bot.guilds))
+        print(f"GUILD: [{guild_index:02}]->{bot.guilds[guild_index]}")
+        ls_text_channels(bot.guilds[guild_index])
+    else:
+        for gi in range(0, len(bot.guilds)):
+            guild: discord.Guild = bot.guilds[gi]
+            print(f"GUILD: [{gi:02}]->{guild.name}")
+            ls_text_channels(guild)
+define_bot_com_command("ls", ls)

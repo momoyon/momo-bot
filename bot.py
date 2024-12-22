@@ -443,7 +443,7 @@ async def main():
         _tasks.append(asyncio.create_task(bot.connect()))
 
     await bot.wait_until_ready()
-    await asyncio.sleep(10)
+    await asyncio.sleep(1)
     com = bot_com.BotCom(bot, bot_state, 'bot.com')
     _tasks.append(com.start())
 
