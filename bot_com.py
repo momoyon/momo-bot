@@ -192,3 +192,45 @@ async def pwd(bot_com: Any, params: List[Any]):
 
     print(f"[{bot_com.bot_state.working_guild_idx}]{working_guild.name} [{bot_com.bot_state.working_channel_idx}]{working_guild.text_channels[bot_com.bot_state.working_channel_idx]}")
 define_bot_com_command("pwd", pwd)
+
+async def cd(bot_com: Any, params: List[Any]):
+    """
+    Changes the current working guild and channel of the bot.
+
+    First param is the index of the guild.
+    Seconds param is the index of the channel.
+    """
+    assert(isinstance(bot_com, BotCom)), "Nigger you must pass a BotCom instance to this"
+
+    if len(params) < 2:
+        raise InsufficientParamsException('cd', ParamCount.EXACT, 2)
+
+    gi: int = -1
+    try:
+        gi = int(params.pop(0))
+    except ValueError:
+        bot_com.logger.error(f"Please pass a number as the guild index!")
+        return
+
+    if gi < 0 or gi > len(bot_com.bot.guilds)-1:
+        bot_com.logger.error(f"guild index out of range!")
+        bot_com.logger.info(f"Valid range is 0..{len(bot_com.bot.guilds)-1}")
+        return
+
+    ci: int = -1
+    try:
+        ci = int(params.pop(0))
+    except ValueError:
+        bot_com.logger.error(f"Please pass a number as the channel index!")
+        return
+
+    if ci < 0 or ci > len(bot_com.bot.guilds[gi].text_channels)-1:
+        bot_com.logger.error(f"channel index out of range!")
+        bot_com.logger.info(f"Valid range is 0..{len(bot_com.bot.guilds[gi].text_channels)-1}")
+        return
+
+    bot_com.bot_state.working_guild_idx = gi
+    bot_com.bot_state.working_channel_idx = ci
+
+    print(f"Cd'd to [{bot_com.bot_state.working_guild_idx}]{bot_com.bot_state.guild().name} [{bot_com.bot_state.working_channel_idx}]{bot_com.bot_state.guild().text_channels[bot_com.bot_state.working_channel_idx]}")
+define_bot_com_command("cd", cd)
