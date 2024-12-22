@@ -80,7 +80,7 @@ class BotCom:
         with open(self.filename, mode="w") as f:
             pass
 
-        async with aiofile.async_open(self.filename, mode='rb') as f:
+        async with aiofile.async_open(self.filename, mode='rb+') as f:
             while True:
                 data: bytes = await f.read(1024)  # Read in chunks to avoid blocking
 

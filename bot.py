@@ -15,6 +15,8 @@ import bot_com
 logging.basicConfig(level=logging.INFO)
 coloredlogs.install(level=logging.INFO)
 
+RUN_DISCORD_BOT=False
+
 MIN_HTTP_BODY_LEN=2000
 
 SOURCE_CODE_FILENAME=f"{os.path.splitext(os.path.basename(__file__))[0]}.stable.py"
@@ -433,8 +435,9 @@ async def main():
     token = os.environ["TOKEN"]
 
     tasks = []
-    tasks.append(asyncio.create_task(bot.login(token)))
-    tasks.append(asyncio.create_task(bot.connect()))
+    if RUN_DISCORD_BOT:
+        tasks.append(asyncio.create_task(bot.login(token)))
+        tasks.append(asyncio.create_task(bot.connect()))
 
     com = bot_com.BotCom(bot, 'bot.com')
     tasks.append(com.start())
