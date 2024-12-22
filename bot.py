@@ -4,7 +4,7 @@ import discord.ext.commands as cmds
 import discord.ext.tasks as tasks
 import os, random
 import yt_dlp
-from typing import List, Any
+from typing import List, Any, cast
 from dotenv import load_dotenv
 import asyncio
 
@@ -34,10 +34,16 @@ intents.message_content = True
 # intents.manage_messages = True
 
 class BotState:
-    def __init__(self, bot: cmds.Bot, spawn_guild: ds.Guild, spawn_channel: ds.TextChannel) -> None:
+    def __init__(self, bot: cmds.Bot, working_guild_id: int, working_channel_idx: int) -> None:
         self.bot = bot
-        self.current_guild: ds.Guild = spawn_guild
-        self.current_channel: ds.TextChannel = spawn_channel
+        self.working_guild_idx: int = working_guild_id
+        self.working_channel_idx: int = working_channel_idx
+
+    def guild(self) -> ds.Guild:
+        return self.bot.guilds[self.working_guild_idx]
+
+    def channel(self) -> ds.TextChannel:
+        return self.guild().text_channels[self.working_channel_idx]
 
 bot_state: BotState | None = None
 bot = cmds.Bot('!!', intents=intents)
@@ -370,25 +376,25 @@ async def on_ready():
     # NOTE: Hard-coded guild and channel ids of my private server...
     SPAWN_GUILD_ID: int = 906230633540485161
     SPAWN_CHANNEL_ID: int = 1319686983131467946
-    spawn_guild = bot.get_guild(SPAWN_GUILD_ID)
-    spawn_channel = bot.get_channel(SPAWN_CHANNEL_ID)
-
-    if spawn_channel == None:
-        bot_logger.warning(f"Spawn Channel with id'{SPAWN_CHANNEL_ID}' not found!")
-    if spawn_guild == None:
+    spawn_guild_idx: int = -1
+    spawn_channel_idx: int = -1
+    try:
+        spawn_guild_idx = bot.guilds.index(bot.get_guild(SPAWN_GUILD_ID))
+    except ValueError:
         bot_logger.warning(f"Spawn Guild with id'{SPAWN_GUILD_ID}' not found!")
 
-    if spawn_guild != None and spawn_channel != None:
-        # We only allow TextChannels to be spawn_channel
-        if not isinstance(spawn_channel, ds.TextChannel):
-            bot_logger.error(f"Brother please choose a TextChannel as the spawn channel!")
-            return
+    try:
+        spawn_channel_idx = bot.guilds[spawn_guild_idx].text_channels.index(cast(ds.TextChannel, bot.get_channel(SPAWN_CHANNEL_ID)))
+    except ValueError:
+        bot_logger.warning(f"Spawn Channel with id'{SPAWN_CHANNEL_ID}' not found!")
 
-        bot_state = BotState(bot, spawn_guild, spawn_channel)
-        print(f"on_ready(): {bot_state=}")
-        bot_logger.info(f"Bot spawned in '{bot_state.current_channel.name}' of guild '{bot_state.current_guild.name}'")
-        await bot_state.current_channel.send("Spawned!", delete_after=10.0)
+    if spawn_guild_idx != -1 and spawn_channel_idx != -1:
 
+        bot_state = BotState(bot, spawn_guild_idx, spawn_channel_idx)
+        guild: ds.Guild = bot.guilds[spawn_guild_idx]
+        channel: ds.TextChannel = guild.text_channels[spawn_channel_idx]
+        bot_logger.info(f"Bot spawned in '{channel.name}' of guild '{guild.name}'")
+        await channel.send("Spawned!", delete_after=10.0)
 
     for g in bot.guilds:
         bot_logger.info(f"    - Bot in {g.name} with id {g.id}")
