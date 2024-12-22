@@ -3,7 +3,7 @@ import logging as log
 import aiofile
 import asyncio
 import discord.ext.commands as cmds
-from typing import Callable, Any, Type
+from typing import Callable, Any, Type, Coroutine
 from enum import IntEnum
 
 log.basicConfig(level=log.DEBUG)
@@ -52,13 +52,13 @@ class InvalidParamTypeException(Exception):
 
 # Classes
 class BotComCommand:
-    def __init__(self, name: str, callback: Callable[[Any, list[Any]], None]) -> None:
+    def __init__(self, name: str, callback: Callable[[Any, list[Any]], Coroutine]) -> None:
         self.name = name
         self.callback = callback
 
 bot_com_commands: dict[str, BotComCommand] = {}
 
-def define_bot_com_command(name: str, callback: Callable[[Any, list[Any]], None]) -> BotComCommand:
+def define_bot_com_command(name: str, callback: Callable[[Any, list[Any]], Coroutine]) -> BotComCommand:
     if name in bot_com_commands != None:
         bot_com_logger.debug(f"Bot command {name} is already defined!")
         return bot_com_commands[name]
@@ -68,8 +68,10 @@ def define_bot_com_command(name: str, callback: Callable[[Any, list[Any]], None]
     return bot_com_commands[name]
 
 class BotCom:
-    def __init__(self, bot: cmds.Bot, filename: str) -> None:
+    def __init__(self, bot: cmds.Bot, bot_state: Any, filename: str) -> None:
         self.bot = bot
+        # NOTE: We assume the use passes a BotState as bot_state
+        self.bot_state = bot_state
         self.logger: log.Logger = log.getLogger(f"{os.path.basename(filename)}")
         self.filename = filename
 
@@ -97,7 +99,7 @@ class BotCom:
                         bot_cmd: BotComCommand = bot_com_commands[cmd]
                         try:
                             # self.logger.info(f"Running command `{cmd}`...")
-                            bot_cmd.callback(self, params)
+                            await bot_cmd.callback(self, params)
                         except Exception as e:
                             self.logger.error(str(e))
                     else:
@@ -111,7 +113,7 @@ class BotCom:
 
 # Defined Bot Com Commands
 # TODO: Find a way to make a decorator that will define a BotComCommand and add it to the map
-def echo(bot_com: Any, params: list[Any]) -> None:
+async def echo(bot_com: Any, params: list[Any]):
     """
     Just echos the given parameters to the stdout. Useful for testing BotComCommand
     """
@@ -121,7 +123,7 @@ def echo(bot_com: Any, params: list[Any]) -> None:
     print("ECHO:", *params)
 define_bot_com_command("echo", echo)
 
-def say(bot_com: Any, params: list[Any]) -> None:
+async def say(bot_com: Any, params: list[Any]):
     """
     Sends a message via the discord bot in the `bot_com`.
 
@@ -138,5 +140,13 @@ def say(bot_com: Any, params: list[Any]) -> None:
 
     bot: cmds.Bot = bot_com.bot
 
-    print(f"TODO: Send to bot:", *msgs)
+    if not bot_com.bot_state:
+        bot_com_logger.warning(f"Bot state is not initialized!")
+    else:
+        args: str = params.pop(0)
+        for p in params:
+            args += f" {p}"
+
+        await bot_com.bot_state.current_channel.send(args)
+
 define_bot_com_command("say", say)

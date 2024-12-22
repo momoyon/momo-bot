@@ -15,7 +15,7 @@ import bot_com
 logging.basicConfig(level=logging.INFO)
 coloredlogs.install(level=logging.INFO)
 
-RUN_DISCORD_BOT=False
+RUN_DISCORD_BOT=True
 
 MIN_HTTP_BODY_LEN=2000
 
@@ -366,6 +366,7 @@ class DevCog(cmds.Cog, name='Dev'):
 async def on_ready():
     bot_logger.info(f'{bot.user} logged in!')
 
+    global bot_state
     # NOTE: Hard-coded guild and channel ids of my private server...
     SPAWN_GUILD_ID: int = 906230633540485161
     SPAWN_CHANNEL_ID: int = 1319686983131467946
@@ -384,6 +385,7 @@ async def on_ready():
             return
 
         bot_state = BotState(bot, spawn_guild, spawn_channel)
+        print(f"on_ready(): {bot_state=}")
         bot_logger.info(f"Bot spawned in '{bot_state.current_channel.name}' of guild '{bot_state.current_guild.name}'")
         await bot_state.current_channel.send("Spawned!", delete_after=10.0)
 
@@ -434,15 +436,18 @@ async def main():
     load_dotenv()
     token = os.environ["TOKEN"]
 
-    tasks = []
+    _tasks = []
+
     if RUN_DISCORD_BOT:
-        tasks.append(asyncio.create_task(bot.login(token)))
-        tasks.append(asyncio.create_task(bot.connect()))
+        await bot.login(token)
+        _tasks.append(asyncio.create_task(bot.connect()))
 
-    com = bot_com.BotCom(bot, 'bot.com')
-    tasks.append(com.start())
+    await bot.wait_until_ready()
+    await asyncio.sleep(10)
+    com = bot_com.BotCom(bot, bot_state, 'bot.com')
+    _tasks.append(com.start())
 
-    await asyncio.gather(*tasks)
+    await asyncio.gather(*_tasks)
 
 if __name__ == '__main__':
     try:
