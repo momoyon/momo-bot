@@ -25,7 +25,6 @@ def main() -> None:
     l.info(f"Started bot_com_client")
     l.info(f"Connecting to bot_com '{bot_com_file}'")
 
-
     if not os.path.exists(bot_com_file):
         l.error(f"bot_com '{bot_com_file}' doesn't exist!")
         exit(1)
@@ -42,6 +41,7 @@ def main() -> None:
         except KeyboardInterrupt:
             break
 
+    send(f, f"echo 'Bot Client disconnected!'")
     f.close()
 
 if __name__ == '__main__':

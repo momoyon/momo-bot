@@ -96,7 +96,7 @@ class BotCom:
                     if cmd in bot_com_commands:
                         bot_cmd: BotComCommand = bot_com_commands[cmd]
                         try:
-                            self.logger.info(f"Running command `{cmd}`...")
+                            # self.logger.info(f"Running command `{cmd}`...")
                             bot_cmd.callback(self, params)
                         except Exception as e:
                             self.logger.error(str(e))
@@ -118,7 +118,7 @@ def echo(bot_com: Any, params: list[Any]) -> None:
     assert(isinstance(bot_com, BotCom)), "Nigger you must pass a BotCom instance to this"
     if len(params) <= 0:
         raise InsufficientParamsException("echo", ParamCount.ATLEAST, 1)
-    bot_com_logger.info(f" ECHO: {params}")
+    print("ECHO:", *params)
 define_bot_com_command("echo", echo)
 
 def say(bot_com: Any, params: list[Any]) -> None:
@@ -134,9 +134,9 @@ def say(bot_com: Any, params: list[Any]) -> None:
     if not isinstance(params[0], str):
         raise InvalidParamTypeException(type(str), type(params[0]), "say")
 
-    msg: str = params.pop(0)
+    msgs: list[str] = params
 
     bot: cmds.Bot = bot_com.bot
 
-    bot_com.logger.info(f"TODO: Send `{msg}` via bot")
+    print(f"TODO: Send to bot:", *msgs)
 define_bot_com_command("say", say)
