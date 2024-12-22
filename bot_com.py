@@ -53,13 +53,13 @@ class InvalidParamTypeException(Exception):
 
 # Classes
 class BotComCommand:
-    def __init__(self, name: str, callback: Callable[[Any, list[Any]], Coroutine]) -> None:
+    def __init__(self, name: str, callback: Callable[[Any, List[Any]], Coroutine]) -> None:
         self.name = name
         self.callback = callback
 
 bot_com_commands: dict[str, BotComCommand] = {}
 
-def define_bot_com_command(name: str, callback: Callable[[Any, list[Any]], Coroutine]) -> BotComCommand:
+def define_bot_com_command(name: str, callback: Callable[[Any, List[Any]], Coroutine]) -> BotComCommand:
     if name in bot_com_commands != None:
         bot_com_logger.debug(f"Bot command {name} is already defined!")
         return bot_com_commands[name]
@@ -77,7 +77,7 @@ class BotCom:
         self.filename = filename
 
     async def start(self) -> None:
-        self.logger.info(f"Started listening on bot com '{self.filename}'")
+        self.logger.info(f"Started Listening on bot com '{self.filename}'")
 
         # Make sure the file exists
         with open(self.filename, mode="w") as f:
@@ -94,7 +94,7 @@ class BotCom:
 
                     cmd: str = data_str.split(' ')[0]
 
-                    params: list[str] = data_str.split(' ')[1:]
+                    params: List[str] = data_str.split(' ')[1:]
 
                     if cmd in bot_com_commands:
                         bot_cmd: BotComCommand = bot_com_commands[cmd]
@@ -114,7 +114,7 @@ class BotCom:
 
 # Defined Bot Com Commands
 # TODO: Find a way to make a decorator that will define a BotComCommand and add it to the map
-async def echo(bot_com: Any, params: list[Any]):
+async def echo(bot_com: Any, params: List[Any]):
     """
     Just echos the given parameters to the stdout. Useful for testing BotComCommand
     """
@@ -124,16 +124,15 @@ async def echo(bot_com: Any, params: list[Any]):
     print("ECHO:", *params)
 define_bot_com_command("echo", echo)
 
-async def say(bot_com: Any, params: list[Any]):
+async def say(bot_com: Any, params: List[Any]):
     """
-    Sends a message via the discord bot in the `bot_com`.
+    Sends a message to the pwd of the bot.
 
     The first argument in the params is the message.
-    The second is the channel to send to.
     """
     assert(isinstance(bot_com, BotCom)), "Nigger you must pass a BotCom instance to this"
     if len(params) <= 0:
-        raise InsufficientParamsException("say", ParamCount.EXACT, 2)
+        raise InsufficientParamsException("say", ParamCount.ATLEAST, 1)
     if not isinstance(params[0], str):
         raise InvalidParamTypeException(type(str), type(params[0]), "say")
 
@@ -144,10 +143,11 @@ async def say(bot_com: Any, params: list[Any]):
         for p in params:
             args += f" {p}"
 
-        await bot_com.bot_state.current_channel.send(args)
+        await bot_com.bot_state.channel().send(args)
+        bot_com.logger.info("Said")
 define_bot_com_command("say", say)
 
-async def ls(bot_com: Any, params: list[Any]):
+async def ls(bot_com: Any, params: List[Any]):
     """
     Lists all the channels in all the guilds the bot belongs.
 
@@ -180,3 +180,15 @@ async def ls(bot_com: Any, params: list[Any]):
             print(f"GUILD: [{gi:02}]->{guild.name}")
             ls_text_channels(guild)
 define_bot_com_command("ls", ls)
+
+async def pwd(bot_com: Any, params: List[Any]):
+    """
+    Prints the current working guild and channel of the bot.
+    """
+    assert(isinstance(bot_com, BotCom)), "Nigger you must pass a BotCom instance to this"
+
+    bot: cmds.Bot = bot_com.bot
+    working_guild: discord.Guild = bot.guilds[bot_com.bot_state.working_guild_idx]
+
+    print(f"[{bot_com.bot_state.working_guild_idx}]{working_guild.name} [{bot_com.bot_state.working_channel_idx}]{working_guild.text_channels[bot_com.bot_state.working_channel_idx]}")
+define_bot_com_command("pwd", pwd)
