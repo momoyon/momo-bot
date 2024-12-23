@@ -24,8 +24,8 @@ SOURCE_CODE_FILENAME=f"{os.path.splitext(os.path.basename(__file__))[0]}.stable.
 MOMOYON_USER_ID=610964132899848208
 
 # TODO: Remove song from queue when current song ends; Have to !!stop to remove from queue rn.
-# TODO: Implement something on on_member_join
 # TODO: Implement command parsing on_message_edit
+# TODO: Implement RPC
 
 # Helpers
 intents = ds.Intents.default()
@@ -368,6 +368,17 @@ class DevCog(cmds.Cog, name='Dev'):
 
 ##################################################
 
+
+@bot.event
+async def on_member_join(member: ds.Member):
+    bot_logger.info(f"New user joined to guild '{member.name}'")
+
+    embed = ds.Embed(title="Greetings")
+    embed.description = "What's up nigger"
+
+    await member.send(embed=embed, mention_author=True)
+
+# TODO: Documentation says this event may be called more than once, do we care about that?
 @bot.event
 async def on_ready():
     bot_logger.info(f'{bot.user} logged in!')
