@@ -342,7 +342,7 @@ class DevCog(cmds.Cog, name='Dev'):
         bot_logger.error(f"{self.qualified_name}Cog :: {type(error)}")
         await ctx.send(embed=embed)
 
-    @cmds.command("kys", help="I will KYS :)", usage="kys")
+    @cmds.command("kys", help="I will Krill Myself :)")
     async def kys(self, ctx):
         KYS_REPONSES = [
                 "Wai-",
