@@ -19,6 +19,8 @@ fi
 
 . $VENV_PATH/bin/activate
 
+pip install --upgrade pip
+
 pip install discord.py pynacl yt_dlp python-dotenv coloredlogs aiofile
 
 python ./bot.py $*
