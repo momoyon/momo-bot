@@ -144,10 +144,13 @@ class MiscCog(cmds.Cog, name="Miscellaneous"):
             return
         await ctx.reply("Shit yourself nigger")
 
-    @cmds.command("av", help="Displays the given user's avatar.", usage="av <member> [server_avatar = false]", aliases=["avatar", "pfp"])
-    async def av(self, ctx, member: ds.Member, server_avatar: bool = False):
+    @cmds.command("av", help="Displays the given user's avatar.", usage="av [member] [server_avatar = false]", aliases=["avatar", "pfp"])
+    async def av(self, ctx, member: ds.Member | None = None, server_avatar: bool = False):
         if ctx.author == bot.user:
             return
+
+        if member == None:
+            member = ctx.author
 
         if server_avatar:
             await ctx.send(member.display_avatar)
