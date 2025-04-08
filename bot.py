@@ -144,7 +144,7 @@ class MiscCog(cmds.Cog, name="Miscellaneous"):
             return
         await ctx.reply("Shit yourself nigger")
 
-    @cmds.command("av", help="Displays the given user's avatar.", usage="av <member> [server_avatar = false]", aliases=["avatar"])
+    @cmds.command("av", help="Displays the given user's avatar.", usage="av <member> [server_avatar = false]", aliases=["avatar", "pfp"])
     async def av(self, ctx, member: ds.Member, server_avatar: bool = False):
         if ctx.author == bot.user:
             return
@@ -374,11 +374,13 @@ class DevCog(cmds.Cog, name='Dev'):
         embed.description = f"Error: {error}"
 
         embed.description += f"\nUsage: {ctx.command.usage}"
-        momoyon: ds.User = await bot.fetch_user(int(os.environ["MOMOYON_USER_ID"]))
-        await ctx.send(f"Only {momoyon.mention} can use dev commands")
+        momoyon: ds.User = await bot.fetch_user(MOMOYON_USER_ID)
+        if ctx.author.id != MOMOYON_USER_ID:
+            await ctx.send(f"Only {momoyon.mention} can use dev commands")
         bot_logger.error(f"{self.qualified_name}Cog :: {type(error)}")
         await ctx.send(embed=embed)
 
+    # TODO: This kills the discord bot, but doesnt kill the script itself.
     @cmds.command("kys", help="I will Krill Myself :)")
     async def kys(self, ctx):
         KYS_REPONSES = [
@@ -390,6 +392,18 @@ class DevCog(cmds.Cog, name='Dev'):
         ]
         await ctx.send(random.choice(KYS_REPONSES))
         await ctx.bot.close()
+
+    @cmds.command("acd", help="Add data to a section in config", usage="acd <section> <data>")
+    async def acd(self, ctx: cmds.Context, section: str, data: str):
+
+        if section not in config:
+            config[section] = []
+
+        config[section].append(data)
+
+        write_config(config, CONFIG_PATH)
+
+        await ctx.send(f"Added `{data}` to `{section}`")
 
     @cmds.command("chan_id", help="Gets the id of the channel.", usage="chan_id")
     async def chan_id(self, ctx: cmds.Context) -> None:
@@ -485,11 +499,19 @@ async def add_cogs():
     await asyncio.gather(*tasks)
 
 async def main():
+    global MOMOYON_USER_ID
 
     await add_cogs()
 
     load_dotenv()
     token = os.environ["TOKEN"]
+
+    if not MOMOYON_USER_ID:
+        try:
+            MOMOYON_USER_ID = int(os.environ["MOMOYON_USER_ID"])
+        except Exception:
+            logger.error("Please set `MOMOYON_USER_ID` envar!")
+            exit(1)
 
     _tasks = []
 
