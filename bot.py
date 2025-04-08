@@ -408,6 +408,38 @@ class DevCog(cmds.Cog, name='Dev'):
 
         await ctx.send(f"Added `{data}` to `{section}`")
 
+    @cmds.command("rcd", help="Remove data from a section in config", usage="rcd <section> <data>")
+    async def rcd(self, ctx: cmds.Context, section: str, data: str):
+
+        if section not in config:
+            await ctx.send(f"`{section}` is not in config!")
+            return
+
+        if data not in config[section]:
+            await ctx.send(f"`{data}` is not in section `{section}`!")
+            return
+
+        config[section].remove(data)
+
+        if len(config[section]) <= 0:
+            config.pop(section)
+
+        write_config(config, CONFIG_PATH)
+
+        await ctx.send(f"Removed `{data}` from `{section}`")
+
+    @cmds.command("lsconfig", help="List the configuration", usage="lsconfig")
+    async def lsconfig(self, ctx: cmds.Context):
+        msg = "```\n"
+        for section in config:
+            msg += f"[{section}]\n"
+            for d in config[section]:
+                msg += f"    {d}\n"
+        msg += "```"
+
+        await ctx.send(msg)
+
+
     @cmds.command("chan_id", help="Gets the id of the channel.", usage="chan_id")
     async def chan_id(self, ctx: cmds.Context) -> None:
         # TODO: Add this as a check for all commands?
