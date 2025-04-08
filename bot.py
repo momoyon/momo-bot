@@ -402,7 +402,11 @@ class DevCog(cmds.Cog, name='Dev'):
         if section not in config:
             config[section] = []
 
-        config[section].append(data)
+        if data in config[section]:
+            await ctx.send(f"`{data}` is already in `{section}`!")
+            return
+        else:
+            config[section].append(data)
 
         write_config(config, CONFIG_PATH)
 
