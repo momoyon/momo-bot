@@ -28,6 +28,29 @@ MOMOYON_USER_ID=610964132899848208
 # TODO: Implement RPC
 
 # Helpers
+
+def read_config(filepath: str):
+    with open(filepath, "r") as f:
+        current_section = None
+        config = {}
+        for l in f.readlines():
+            l = l.removesuffix("\n")
+            # Ignore comments
+            if l.startswith("#"): continue
+            if l.startswith("["):
+                current_section = l.removeprefix("[").removesuffix("]")
+                # print(f"{current_section=}")
+            else:
+                if current_section == None:
+                    logging.error("Data cannot be outside sections!")
+                    exit(1)
+                else:
+                    if current_section not in config:
+                        config[current_section] = []
+                    config[current_section].append(l)
+        return config
+
+config = {}
 intents = ds.Intents.default()
 intents.members = True
 intents.message_content = True
@@ -284,19 +307,7 @@ class MusicCog(cmds.Cog, name="Music"):
 class TouhouCog(cmds.Cog, name='Touhou'):
     def __init__(self, bot):
         self.bot = bot
-        self.MARISAD_GIFS = [
-                'https://tenor.com/view/marisa-kirisame-touhou-project-sad-crying-gif-24418828',
-                'https://tenor.com/view/marisad-touhou-marisa-kirisame-sad-gif-20456205',
-                'https://tenor.com/view/marisa-cry-spin-rain-touhou-gif-22503177',
-                'https://media.tenor.com/eYM3tar4rtkAAAAM/marisa-touhou.gif',
-                'https://tenor.com/view/touhou-touhou-project-2hu-marisa-marisa-kirisame-gif-22639972',
-                'https://tenor.com/view/touhou-touhou-project-kirisame-marisa-marisa-kirisame-gif-11936097800016515634',
-                'https://media.tenor.com/raHKUM94bmoAAAAM/marisa-marisa-fumo.gif',
-                'https://media.tenor.com/I-eNMAa65gMAAAAM/marisad-potto.gif',
-                'https://media.tenor.com/xMK8WwNBVuIAAAAM/marisa-marisakirisame.gif',
-                'https://media.tenor.com/kZ2En0Slm28AAAAM/marisa-touhou.gif',
-                'https://media.tenor.com/v5oS9ZOVq0cAAAAM/marisa-kirisame-touhou.gif',
-        ]
+        self.MARISAD_GIFS = config['marisad_gifs']
 
     async def cog_command_error(self, ctx: cmds.Context, error: Exception) -> None:
         assert type(ctx.command) == cmds.Command
@@ -448,6 +459,7 @@ async def add_cogs():
     await asyncio.gather(*tasks)
 
 async def main():
+
     await add_cogs()
 
     load_dotenv()
@@ -467,6 +479,7 @@ async def main():
     await asyncio.gather(*_tasks)
 
 if __name__ == '__main__':
+    config = read_config("./config")
     try:
         asyncio.run(main())
     except KeyboardInterrupt as ki:
