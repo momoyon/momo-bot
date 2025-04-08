@@ -5,7 +5,7 @@ PYTHON=python
 
 if [ ! $(command -v $PYTHON) ]; then
     PYTHON=python3
-    if [ ! $(command -v $PYTHON ]; then
+    if [ ! $(command -v $PYTHON) ]; then
         echo "ERROR: `python` nor `python3` is in PATH!"
         exit 1
     fi
