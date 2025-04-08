@@ -15,6 +15,8 @@ import bot_com
 logging.basicConfig(level=logging.INFO)
 coloredlogs.install(level=logging.INFO)
 
+CONFIG_PATH="./config"
+
 RUN_DISCORD_BOT=True
 
 MIN_HTTP_BODY_LEN=2000
@@ -36,7 +38,8 @@ def read_config(filepath: str):
         for l in f.readlines():
             l = l.removesuffix("\n")
             # Ignore comments
-            if l.startswith("#"): continue
+            if l.startswith("#") or len(l) <= 0:
+                continue
             if l.startswith("["):
                 current_section = l.removeprefix("[").removesuffix("]")
                 # print(f"{current_section=}")
@@ -50,6 +53,21 @@ def read_config(filepath: str):
                     config[current_section].append(l)
         return config
 
+def copy_file(a: str, b: str):
+    with open(a, "r") as og:
+        with open(b, "w") as old:
+            old.write(og.read())
+
+def write_config(config, filepath):
+    if os.path.exists(filepath):
+        copy_file(filepath, filepath+".old")
+
+    f = open(filepath, "w")
+    for section in config:
+        f.write(f"[{section}]\n")
+        for data in config[section]:
+            f.write(data + "\n")
+    f.close()
 config = {}
 intents = ds.Intents.default()
 intents.members = True
@@ -304,10 +322,11 @@ class MusicCog(cmds.Cog, name="Music"):
         else:
             await ctx.send(f"No song is currently paused/playing", delete_after=10.0, silent=True)
 
-class TouhouCog(cmds.Cog, name='Touhou'):
+class BoopCog(cmds.Cog, name='Boop'):
     def __init__(self, bot):
         self.bot = bot
         self.MARISAD_GIFS = config['marisad_gifs']
+        self.TETO_GIFS = config['teto_gifs']
 
     async def cog_command_error(self, ctx: cmds.Context, error: Exception) -> None:
         assert type(ctx.command) == cmds.Command
@@ -332,6 +351,13 @@ class TouhouCog(cmds.Cog, name='Touhou'):
                 await ctx.send('https://tenor.com/view/bouncing-marisa-fumo-marisa-kirisame-touhou-fumo-gif-16962360816851147092')
             else:
                 await ctx.send(random.choice(self.MARISAD_GIFS))
+
+    @cmds.command("teto", help="fatass teto", usage="teto")
+    async def teto(self, ctx: cmds.Context) -> None:
+        if ctx.author == bot.user:
+            return
+        async with ctx.typing():
+            await ctx.send(random.choice(self.TETO_GIFS))
 
 class DevCog(cmds.Cog, name='Dev'):
     def __init__(self, bot):
@@ -451,7 +477,7 @@ async def add_cogs():
     coroutines = []
     coroutines.append(bot.add_cog(MiscCog(bot)))
     coroutines.append(bot.add_cog(MusicCog(bot)))
-    coroutines.append(bot.add_cog(TouhouCog(bot)))
+    coroutines.append(bot.add_cog(BoopCog(bot)))
     coroutines.append(bot.add_cog(DevCog(bot)))
 
     tasks = [asyncio.create_task(coroutine) for coroutine in coroutines]
@@ -479,7 +505,7 @@ async def main():
     await asyncio.gather(*_tasks)
 
 if __name__ == '__main__':
-    config = read_config("./config")
+    config = read_config(CONFIG_PATH)
     try:
         asyncio.run(main())
     except KeyboardInterrupt as ki:
