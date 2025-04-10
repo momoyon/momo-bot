@@ -94,6 +94,7 @@ bot_logger: logging.Logger = logging.getLogger("bot")
 class MiscCog(cmds.Cog, name="Miscellaneous"):
     def __init__(self, bot):
         self.bot = bot
+        self.github_link = config['github_link'][0]
 
     async def cog_command_error(self, ctx: cmds.Context, error: Exception) -> None:
         assert type(ctx.command) == cmds.Command
@@ -105,6 +106,10 @@ class MiscCog(cmds.Cog, name="Miscellaneous"):
         embed.description += f"\nUsage: {ctx.command.usage}"
         bot_logger.error(f"{self.qualified_name}Cog :: {type(error)}")
         await ctx.send(embed=embed)
+
+    @cmds.command("github", help="Github repo link of myself", usage="github")
+    async def github(self, ctx: cmds.Context):
+        await ctx.send(f"{self.github_link}")
 
     @cmds.command("swapcase", help="Inverts the case of the input.", usage="swap <text>")
     async def swapcase(self, ctx: cmds.Context, *, text: str):
@@ -220,7 +225,7 @@ class MusicCog(cmds.Cog, name="Music"):
                 return
 
             info_dict = self.ytdlp.extract_info(link, download=False)
-            assert type(info_dict) == dict[str, Any]
+            # assert type(info_dict) == dict[str, Any]
 
             title = info_dict["title"]
 
@@ -567,6 +572,7 @@ async def main():
 
 if __name__ == '__main__':
     config = read_config(CONFIG_PATH)
+
     try:
         asyncio.run(main())
     except KeyboardInterrupt as ki:
