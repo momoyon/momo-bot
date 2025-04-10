@@ -220,7 +220,7 @@ class MusicCog(cmds.Cog, name="Music"):
                 return
 
             info_dict = self.ytdlp.extract_info(link, download=False)
-            assert type(info_dict) == dict[str, Any]
+            # assert type(info_dict) == dict[str, Any]
 
             title = info_dict["title"]
 
