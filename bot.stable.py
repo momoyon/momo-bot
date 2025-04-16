@@ -3,7 +3,6 @@ from discord import FFmpegPCMAudio
 import discord.ext.commands as cmds
 import discord.ext.tasks as tasks
 import os, random
-import yt_dlp
 from typing import List, Any, cast
 from dotenv import load_dotenv
 import asyncio
@@ -15,6 +14,8 @@ import bot_com
 logging.basicConfig(level=logging.INFO)
 coloredlogs.install(level=logging.INFO)
 
+CONFIG_PATH="./config"
+
 RUN_DISCORD_BOT=True
 
 MIN_HTTP_BODY_LEN=2000
@@ -23,13 +24,52 @@ SOURCE_CODE_FILENAME=f"{os.path.splitext(os.path.basename(__file__))[0]}.stable.
 
 MOMOYON_USER_ID=610964132899848208
 
-# TODO: Remove song from queue when current song ends; Have to !!stop to remove from queue rn.
 # TODO: Implement command parsing on_message_edit
 # TODO: Implement RPC
 
 # Helpers
+
+def read_config(filepath: str):
+    with open(filepath, "r") as f:
+        current_section = None
+        config = {}
+        for l in f.readlines():
+            l = l.removesuffix("\n")
+            # Ignore comments
+            if l.startswith("#") or len(l) <= 0:
+                continue
+            if l.startswith("["):
+                current_section = l.removeprefix("[").removesuffix("]")
+                # print(f"{current_section=}")
+            else:
+                if current_section == None:
+                    logging.error("Data cannot be outside sections!")
+                    exit(1)
+                else:
+                    if current_section not in config:
+                        config[current_section] = []
+                    config[current_section].append(l)
+        return config
+
+def copy_file(a: str, b: str):
+    with open(a, "r") as og:
+        with open(b, "w") as old:
+            old.write(og.read())
+
+def write_config(config, filepath):
+    if os.path.exists(filepath):
+        copy_file(filepath, filepath+".old")
+
+    f = open(filepath, "w")
+    for section in config:
+        f.write(f"[{section}]\n")
+        for data in config[section]:
+            f.write(data + "\n")
+    f.close()
+config = {}
 intents = ds.Intents.default()
 intents.members = True
+intents.presences = True
 intents.message_content = True
 # intents.manage_messages = True
 
@@ -53,6 +93,7 @@ bot_logger: logging.Logger = logging.getLogger("bot")
 class MiscCog(cmds.Cog, name="Miscellaneous"):
     def __init__(self, bot):
         self.bot = bot
+        self.github_link = config['github_link'][0]
 
     async def cog_command_error(self, ctx: cmds.Context, error: Exception) -> None:
         assert type(ctx.command) == cmds.Command
@@ -64,6 +105,10 @@ class MiscCog(cmds.Cog, name="Miscellaneous"):
         embed.description += f"\nUsage: {ctx.command.usage}"
         bot_logger.error(f"{self.qualified_name}Cog :: {type(error)}")
         await ctx.send(embed=embed)
+
+    @cmds.command("github", help="Github repo link of myself", usage="github")
+    async def github(self, ctx: cmds.Context):
+        await ctx.send(f"{self.github_link}")
 
     @cmds.command("swapcase", help="Inverts the case of the input.", usage="swap <text>")
     async def swapcase(self, ctx: cmds.Context, *, text: str):
@@ -103,200 +148,24 @@ class MiscCog(cmds.Cog, name="Miscellaneous"):
             return
         await ctx.reply("Shit yourself nigger")
 
-    @cmds.command("av", help="Displays the given user's avatar.", usage="av <member> [server_avatar = false]", aliases=["avatar"])
-    async def av(self, ctx, member: ds.Member, server_avatar: bool = False):
+    @cmds.command("av", help="Displays the given user's avatar.", usage="av [member] [server_avatar = false]", aliases=["avatar", "pfp"])
+    async def av(self, ctx, member: ds.Member | None = None, server_avatar: bool = False):
         if ctx.author == bot.user:
             return
+
+        if member == None:
+            member = ctx.author
 
         if server_avatar:
             await ctx.send(member.display_avatar)
         else:
             await ctx.send(member.avatar)
-    
-class MusicCog(cmds.Cog, name="Music"):
-    def __init__(self, bot) -> None:
-        self.bot = bot
-        yt_dlp_options = {
-            "format": "bestaudio",
-            "cookiefile": "cookies.txt",
-            # "extract_audio": True,
-            "windowsfilenames": False,
-            "overwrites": True,
-            "default_search": "auto",
-            # "no_warnings": True,
-            # "quiet": True,
-            "logger": logging.getLogger("yt_dlp")
-        }
-        self.music_queue : List[dict] = []
-        self.ytdlp = yt_dlp.YoutubeDL(yt_dlp_options)
 
-    async def cog_command_error(self, ctx: cmds.Context, error: Exception) -> None:
-        assert type(ctx.command) == cmds.Command
-
-        embed = ds.Embed(title="Error")
-        if isinstance(error, cmds.CommandInvokeError):
-            error = error.original
-        if isinstance(error, yt_dlp.utils.UnsupportedError) or isinstance(error, yt_dlp.utils.DownloadError):
-            embed.description = f"Error: That is not a valid youtube link!"
-        else:
-            embed.description = f"Error: {error}"
-
-        embed.description += f"\nUsage: {ctx.command.usage}"
-        bot_logger.error(f"{self.qualified_name}Cog :: {type(error)}")
-        await ctx.send(embed=embed)
-
-    async def play_audio(self, ctx, player: ds.VoiceClient, info_dict):
-        title: str = info_dict['title']
-        bot_logger.info(f"Playing '{title}'...")
-        await ctx.send(f"Playing '{title}'...", silent=True)
-
-        player.play(FFmpegPCMAudio(info_dict["url"], options="-vn"))
-
-    @cmds.command("queue", help="Lists the songs in the queue.", usage="queue")
-    async def queue(self, ctx):
-        if ctx.author == bot.user:
-            return
-
-        if len(self.music_queue) <= 0:
-            await ctx.send("Music queue is empty!", silent=True)
-            return
-
-        msg: str = "Music: Queue: "
-        for m in self.music_queue:
-            msg += f"\n- {m['info']['title']}"
-
-        await ctx.send(msg, silent=True)
-
-    # TODO: Find a way to check if the supplied song is already in the queue WITHOUT querying for the video info because that takes time.
-    @cmds.command("play", help="Play youtube videos", usage="play <youtube-link>")
-    async def play(self, ctx, link: str):
-        async with ctx.typing():
-            if not ctx.author.voice:
-                await ctx.send("Please join a Voice Channel and run the command!", silent=True)
-                return
-
-            info_dict = self.ytdlp.extract_info(link, download=False)
-            assert type(info_dict) == dict[str, Any]
-
-            title = info_dict["title"]
-
-            # The song is in the queue
-            for m in self.music_queue:
-                if title == m['info']['title']:
-                    await ctx.send("Song is already in the queue!", silent=True)
-                    return
-
-            # make the bot join vc
-            player: ds.VoiceClient = ctx.guild.voice_client if ctx.guild.voice_client else await ctx.author.voice.channel.connect()
-
-            if player.is_playing():
-                assert(len(self.music_queue) > 0)
-
-                await ctx.send(f"Another song is already playing, added to queue", silent=True)
-                self.music_queue.append({"info": info_dict, "link": link})
-            else:
-                self.music_queue.insert(0, {"info": info_dict, "link": link})
-
-                await self.play_audio(ctx, player, info_dict)
-
-    @cmds.command("stop", help="Stops the currently playing song, if any.", usage="stop")
-    async def stop(self, ctx):
-        if ctx.guild.voice_client:
-            ctx.guild.voice_client.stop()
-            if len(self.music_queue) > 0:
-                top = self.music_queue.pop()
-                title = top["info"]["title"]
-                await ctx.send(f"Stopped playing '{title}'...", silent=True)
-            if len(self.music_queue) <= 0:
-                await ctx.send("No song left in queue, leaving VC", silent=True)
-                await ctx.guild.voice_client.disconnect()
-            else:
-                await ctx.send("Playing next song in queue...", silent=True)
-                next_song_link = self.music_queue[0]["link"]
-                await self.play(ctx, next_song_link)
-        else:
-            await ctx.send(f"No song is playing!", silent=True)
-
-    @cmds.command("next", help="Skips the current song and plays the next song, if any.")
-    async def next(self, ctx):
-        if ctx.author == bot.user:
-            return
-        async with ctx.typing():
-            async def no_next_song() -> bool:
-                if len(self.music_queue) <= 0:
-                    if ctx.guild.voice_client:
-                        await ctx.send("No song in queue; Exiting from VC", silent=True)
-                        await ctx.guild.voice_client.disconnect()
-                    else:
-                        await ctx.send("No song in queue", silent=True)
-                    return True
-                else:
-                    return False
-
-            if await no_next_song(): return
-
-            if not ctx.guild.voice_client:
-                await ctx.send("No song is currently playing!", silent=True)
-                return
-            if ctx.guild.voice_client:
-                if ctx.voice_client.is_playing():
-                    ctx.voice_client.stop()
-
-            current_song = self.music_queue.pop(0)['info']['title']
-            bot_logger.info(f"Stopped playing {current_song}")
-
-            if await no_next_song(): return
-
-            next_song = self.music_queue[0]
-
-            assert ctx.guild.voice_client
-            player = ctx.guild.voice_client
-
-            await self.play_audio(ctx, player, next_song['info'])
-
-    @cmds.command("pause", help="Paused the currently playing song, if any.", usage="pause")
-    async def pause(self, ctx):
-        if ctx.guild.voice_client:
-            assert(len(self.music_queue) > 0)
-            if not ctx.guild.voice_client.is_playing():
-                await ctx.send("The song is already paused dummy!", delete_after=10.0, silent=True)
-            else:
-                ctx.guild.voice_client.pause()
-                title = self.music_queue[0]["info"]["title"]
-                await ctx.send(f"Paused {title}...", delete_after=10.0, silent=True)
-        else:
-            await ctx.send(f"No song is currently playing", delete_after=10.0, silent=True)
-
-    @cmds.command("resume", help="Resumes the currently paused song, if any.", usage="resume")
-    async def resume(self, ctx):
-        if ctx.guild.voice_client:
-            # Disconnect from VC instead of asserting
-            assert(len(self.music_queue) > 0)
-            if ctx.guild.voice_client.is_playing():
-                await ctx.send("The song is already playing dummy!", delete_after=10.0, silent=True)
-            else:
-                ctx.guild.voice_client.resume()
-                title = self.music_queue[0]["info"]["title"]
-                await ctx.send(f"Resumed {title}...", delete_after=10.0, silent=True)
-        else:
-            await ctx.send(f"No song is currently paused/playing", delete_after=10.0, silent=True)
-
-class TouhouCog(cmds.Cog, name='Touhou'):
+class BoopCog(cmds.Cog, name='Boop'):
     def __init__(self, bot):
         self.bot = bot
-        self.MARISAD_GIFS = [
-                'https://tenor.com/view/marisa-kirisame-touhou-project-sad-crying-gif-24418828',
-                'https://tenor.com/view/marisad-touhou-marisa-kirisame-sad-gif-20456205',
-                'https://tenor.com/view/marisa-cry-spin-rain-touhou-gif-22503177',
-                'https://media.tenor.com/eYM3tar4rtkAAAAM/marisa-touhou.gif',
-                'https://tenor.com/view/touhou-touhou-project-2hu-marisa-marisa-kirisame-gif-22639972',
-                'https://tenor.com/view/touhou-touhou-project-kirisame-marisa-marisa-kirisame-gif-11936097800016515634',
-                'https://media.tenor.com/raHKUM94bmoAAAAM/marisa-marisa-fumo.gif',
-                'https://media.tenor.com/I-eNMAa65gMAAAAM/marisad-potto.gif',
-                'https://media.tenor.com/xMK8WwNBVuIAAAAM/marisa-marisakirisame.gif',
-                'https://media.tenor.com/kZ2En0Slm28AAAAM/marisa-touhou.gif',
-                'https://media.tenor.com/v5oS9ZOVq0cAAAAM/marisa-kirisame-touhou.gif',
-        ]
+        self.MARISAD_GIFS = config['marisad_gifs']
+        self.TETO_GIFS = config['teto_gifs']
 
     async def cog_command_error(self, ctx: cmds.Context, error: Exception) -> None:
         assert type(ctx.command) == cmds.Command
@@ -322,6 +191,13 @@ class TouhouCog(cmds.Cog, name='Touhou'):
             else:
                 await ctx.send(random.choice(self.MARISAD_GIFS))
 
+    @cmds.command("teto", help="fatass teto", usage="teto")
+    async def teto(self, ctx: cmds.Context) -> None:
+        if ctx.author == bot.user:
+            return
+        async with ctx.typing():
+            await ctx.send(random.choice(self.TETO_GIFS))
+
 class DevCog(cmds.Cog, name='Dev'):
     def __init__(self, bot):
         self.bot = bot
@@ -337,12 +213,14 @@ class DevCog(cmds.Cog, name='Dev'):
         embed.description = f"Error: {error}"
 
         embed.description += f"\nUsage: {ctx.command.usage}"
-        momoyon: ds.User = await bot.fetch_user(int(os.environ["MOMOYON_USER_ID"]))
-        await ctx.send(f"Only {momoyon.mention} can use dev commands")
+        momoyon: ds.User = await bot.fetch_user(MOMOYON_USER_ID)
+        if ctx.author.id != MOMOYON_USER_ID:
+            await ctx.send(f"Only {momoyon.mention} can use dev commands")
         bot_logger.error(f"{self.qualified_name}Cog :: {type(error)}")
         await ctx.send(embed=embed)
 
-    @cmds.command("kys", help="I will KYS :)", usage="kys")
+    # TODO: This kills the discord bot, but doesnt kill the script itself.
+    @cmds.command("kys", help="I will Krill Myself :)")
     async def kys(self, ctx):
         KYS_REPONSES = [
                 "Wai-",
@@ -353,6 +231,54 @@ class DevCog(cmds.Cog, name='Dev'):
         ]
         await ctx.send(random.choice(KYS_REPONSES))
         await ctx.bot.close()
+
+    @cmds.command("acd", help="Add data to a section in config", usage="acd <section> <data>")
+    async def acd(self, ctx: cmds.Context, section: str, data: str):
+
+        if section not in config:
+            config[section] = []
+
+        if data in config[section]:
+            await ctx.send(f"`{data}` is already in `{section}`!")
+            return
+        else:
+            config[section].append(data)
+
+        write_config(config, CONFIG_PATH)
+
+        await ctx.send(f"Added `{data}` to `{section}`")
+
+    @cmds.command("rcd", help="Remove data from a section in config", usage="rcd <section> <data>")
+    async def rcd(self, ctx: cmds.Context, section: str, data: str):
+
+        if section not in config:
+            await ctx.send(f"`{section}` is not in config!")
+            return
+
+        if data not in config[section]:
+            await ctx.send(f"`{data}` is not in section `{section}`!")
+            return
+
+        config[section].remove(data)
+
+        if len(config[section]) <= 0:
+            config.pop(section)
+
+        write_config(config, CONFIG_PATH)
+
+        await ctx.send(f"Removed `{data}` from `{section}`")
+
+    @cmds.command("lsconfig", help="List the configuration", usage="lsconfig")
+    async def lsconfig(self, ctx: cmds.Context):
+        msg = "```\n"
+        for section in config:
+            msg += f"[{section}]\n"
+            for d in config[section]:
+                msg += f"    {d}\n"
+        msg += "```"
+
+        await ctx.send(msg)
+
 
     @cmds.command("chan_id", help="Gets the id of the channel.", usage="chan_id")
     async def chan_id(self, ctx: cmds.Context) -> None:
@@ -439,8 +365,7 @@ async def on_message(msg):
 async def add_cogs():
     coroutines = []
     coroutines.append(bot.add_cog(MiscCog(bot)))
-    coroutines.append(bot.add_cog(MusicCog(bot)))
-    coroutines.append(bot.add_cog(TouhouCog(bot)))
+    coroutines.append(bot.add_cog(BoopCog(bot)))
     coroutines.append(bot.add_cog(DevCog(bot)))
 
     tasks = [asyncio.create_task(coroutine) for coroutine in coroutines]
@@ -448,10 +373,19 @@ async def add_cogs():
     await asyncio.gather(*tasks)
 
 async def main():
+    global MOMOYON_USER_ID
+
     await add_cogs()
 
     load_dotenv()
     token = os.environ["TOKEN"]
+
+    if not MOMOYON_USER_ID:
+        try:
+            MOMOYON_USER_ID = int(os.environ["MOMOYON_USER_ID"])
+        except Exception:
+            logger.error("Please set `MOMOYON_USER_ID` envar!")
+            exit(1)
 
     _tasks = []
 
@@ -460,6 +394,16 @@ async def main():
         _tasks.append(asyncio.create_task(bot.connect()))
 
     await bot.wait_until_ready()
+
+    activity = ds.Activity(
+        type=ds.ActivityType.watching,
+        state="locked in",
+        details="Watching Serial Experiments Lain",
+        platform="NASA SuperComputer",
+        start={"start": 0}
+    )
+    await bot.change_presence(status=None, activity=activity)
+
     await asyncio.sleep(1)
     com = bot_com.BotCom(bot, bot_state, 'bot.com')
     _tasks.append(com.start())
@@ -467,6 +411,8 @@ async def main():
     await asyncio.gather(*_tasks)
 
 if __name__ == '__main__':
+    config = read_config(CONFIG_PATH)
+
     try:
         asyncio.run(main())
     except KeyboardInterrupt as ki:
