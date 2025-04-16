@@ -3,7 +3,6 @@ from discord import FFmpegPCMAudio
 import discord.ext.commands as cmds
 import discord.ext.tasks as tasks
 import os, random
-import yt_dlp
 from typing import List, Any, cast
 from dotenv import load_dotenv
 import asyncio
@@ -161,174 +160,6 @@ class MiscCog(cmds.Cog, name="Miscellaneous"):
             await ctx.send(member.display_avatar)
         else:
             await ctx.send(member.avatar)
-    
-class MusicCog(cmds.Cog, name="Music"):
-    def __init__(self, bot) -> None:
-        self.bot = bot
-        yt_dlp_options = {
-            "format": "bestaudio",
-            "cookiefile": "cookies.txt",
-            # "extract_audio": True,
-            "windowsfilenames": False,
-            "overwrites": True,
-            "default_search": "auto",
-            # "no_warnings": True,
-            # "quiet": True,
-            "logger": logging.getLogger("yt_dlp")
-        }
-        self.music_queue : List[dict] = []
-        self.ytdlp = yt_dlp.YoutubeDL(yt_dlp_options)
-
-    async def cog_command_error(self, ctx: cmds.Context, error: Exception) -> None:
-        assert type(ctx.command) == cmds.Command
-
-        embed = ds.Embed(title="Error")
-        if isinstance(error, cmds.CommandInvokeError):
-            error = error.original
-        if isinstance(error, yt_dlp.utils.UnsupportedError) or isinstance(error, yt_dlp.utils.DownloadError):
-            embed.description = f"Error: That is not a valid youtube link!"
-        else:
-            embed.description = f"Error: {error}"
-
-        embed.description += f"\nUsage: {ctx.command.usage}"
-        bot_logger.error(f"{self.qualified_name}Cog :: {type(error)}")
-        await ctx.send(embed=embed)
-
-    async def play_audio(self, ctx, player: ds.VoiceClient, info_dict):
-        title: str = info_dict['title']
-        bot_logger.info(f"Playing '{title}'...")
-        await ctx.send(f"Playing '{title}'...", silent=True)
-
-        player.play(FFmpegPCMAudio(info_dict["url"], options="-vn"))
-
-    @cmds.command("queue", help="Lists the songs in the queue.", usage="queue")
-    async def queue(self, ctx):
-        if ctx.author == bot.user:
-            return
-
-        if len(self.music_queue) <= 0:
-            await ctx.send("Music queue is empty!", silent=True)
-            return
-
-        msg: str = "Music: Queue: "
-        for m in self.music_queue:
-            msg += f"\n- {m['info']['title']}"
-
-        await ctx.send(msg, silent=True)
-
-    # TODO: Find a way to check if the supplied song is already in the queue WITHOUT querying for the video info because that takes time.
-    @cmds.command("play", help="Play youtube videos", usage="play <youtube-link>")
-    async def play(self, ctx, link: str):
-        async with ctx.typing():
-            if not ctx.author.voice:
-                await ctx.send("Please join a Voice Channel and run the command!", silent=True)
-                return
-
-            info_dict = self.ytdlp.extract_info(link, download=False)
-            # assert type(info_dict) == dict[str, Any]
-
-            title = info_dict["title"]
-
-            # The song is in the queue
-            for m in self.music_queue:
-                if title == m['info']['title']:
-                    await ctx.send("Song is already in the queue!", silent=True)
-                    return
-
-            # make the bot join vc
-            player: ds.VoiceClient = ctx.guild.voice_client if ctx.guild.voice_client else await ctx.author.voice.channel.connect()
-
-            if player.is_playing():
-                assert(len(self.music_queue) > 0)
-
-                await ctx.send(f"Another song is already playing, added to queue", silent=True)
-                self.music_queue.append({"info": info_dict, "link": link})
-            else:
-                self.music_queue.insert(0, {"info": info_dict, "link": link})
-
-                await self.play_audio(ctx, player, info_dict)
-
-    @cmds.command("stop", help="Stops the currently playing song, if any.", usage="stop")
-    async def stop(self, ctx):
-        if ctx.guild.voice_client:
-            ctx.guild.voice_client.stop()
-            if len(self.music_queue) > 0:
-                top = self.music_queue.pop()
-                title = top["info"]["title"]
-                await ctx.send(f"Stopped playing '{title}'...", silent=True)
-            if len(self.music_queue) <= 0:
-                await ctx.send("No song left in queue, leaving VC", silent=True)
-                await ctx.guild.voice_client.disconnect()
-            else:
-                await ctx.send("Playing next song in queue...", silent=True)
-                next_song_link = self.music_queue[0]["link"]
-                await self.play(ctx, next_song_link)
-        else:
-            await ctx.send(f"No song is playing!", silent=True)
-
-    @cmds.command("next", help="Skips the current song and plays the next song, if any.")
-    async def next(self, ctx):
-        if ctx.author == bot.user:
-            return
-        async with ctx.typing():
-            async def no_next_song() -> bool:
-                if len(self.music_queue) <= 0:
-                    if ctx.guild.voice_client:
-                        await ctx.send("No song in queue; Exiting from VC", silent=True)
-                        await ctx.guild.voice_client.disconnect()
-                    else:
-                        await ctx.send("No song in queue", silent=True)
-                    return True
-                else:
-                    return False
-
-            if await no_next_song(): return
-
-            if not ctx.guild.voice_client:
-                await ctx.send("No song is currently playing!", silent=True)
-                return
-            if ctx.guild.voice_client:
-                if ctx.voice_client.is_playing():
-                    ctx.voice_client.stop()
-
-            current_song = self.music_queue.pop(0)['info']['title']
-            bot_logger.info(f"Stopped playing {current_song}")
-
-            if await no_next_song(): return
-
-            next_song = self.music_queue[0]
-
-            assert ctx.guild.voice_client
-            player = ctx.guild.voice_client
-
-            await self.play_audio(ctx, player, next_song['info'])
-
-    @cmds.command("pause", help="Paused the currently playing song, if any.", usage="pause")
-    async def pause(self, ctx):
-        if ctx.guild.voice_client:
-            assert(len(self.music_queue) > 0)
-            if not ctx.guild.voice_client.is_playing():
-                await ctx.send("The song is already paused dummy!", delete_after=10.0, silent=True)
-            else:
-                ctx.guild.voice_client.pause()
-                title = self.music_queue[0]["info"]["title"]
-                await ctx.send(f"Paused {title}...", delete_after=10.0, silent=True)
-        else:
-            await ctx.send(f"No song is currently playing", delete_after=10.0, silent=True)
-
-    @cmds.command("resume", help="Resumes the currently paused song, if any.", usage="resume")
-    async def resume(self, ctx):
-        if ctx.guild.voice_client:
-            # Disconnect from VC instead of asserting
-            assert(len(self.music_queue) > 0)
-            if ctx.guild.voice_client.is_playing():
-                await ctx.send("The song is already playing dummy!", delete_after=10.0, silent=True)
-            else:
-                ctx.guild.voice_client.resume()
-                title = self.music_queue[0]["info"]["title"]
-                await ctx.send(f"Resumed {title}...", delete_after=10.0, silent=True)
-        else:
-            await ctx.send(f"No song is currently paused/playing", delete_after=10.0, silent=True)
 
 class BoopCog(cmds.Cog, name='Boop'):
     def __init__(self, bot):
@@ -534,7 +365,6 @@ async def on_message(msg):
 async def add_cogs():
     coroutines = []
     coroutines.append(bot.add_cog(MiscCog(bot)))
-    coroutines.append(bot.add_cog(MusicCog(bot)))
     coroutines.append(bot.add_cog(BoopCog(bot)))
     coroutines.append(bot.add_cog(DevCog(bot)))
 

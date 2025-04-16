@@ -42,7 +42,7 @@ if !running_from_cmd! == 1 (
 
 pip install --upgrade pip
 
-pip install discord.py pynacl yt_dlp python-dotenv coloredlogs aiofile
+pip install discord.py python-dotenv coloredlogs aiofile
 
 python .\bot.py !*
 
