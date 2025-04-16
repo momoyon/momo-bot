@@ -24,7 +24,6 @@ SOURCE_CODE_FILENAME=f"{os.path.splitext(os.path.basename(__file__))[0]}.stable.
 
 MOMOYON_USER_ID=610964132899848208
 
-# TODO: Remove song from queue when current song ends; Have to !!stop to remove from queue rn.
 # TODO: Implement command parsing on_message_edit
 # TODO: Implement RPC
 
@@ -70,6 +69,7 @@ def write_config(config, filepath):
 config = {}
 intents = ds.Intents.default()
 intents.members = True
+intents.presences = True
 intents.message_content = True
 # intents.manage_messages = True
 
@@ -394,6 +394,16 @@ async def main():
         _tasks.append(asyncio.create_task(bot.connect()))
 
     await bot.wait_until_ready()
+
+    activity = ds.Activity(
+        type=ds.ActivityType.watching,
+        state="locked in",
+        details="Watching Serial Experiments Lain",
+        platform="NASA SuperComputer",
+        start={"start": 0}
+    )
+    await bot.change_presence(status=None, activity=activity)
+
     await asyncio.sleep(1)
     com = bot_com.BotCom(bot, bot_state, 'bot.com')
     _tasks.append(com.start())
