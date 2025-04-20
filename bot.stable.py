@@ -166,6 +166,7 @@ class BoopCog(cmds.Cog, name='Boop'):
         self.bot = bot
         self.MARISAD_GIFS = config['marisad_gifs']
         self.TETO_GIFS = config['teto_gifs']
+        self.DORO = config['doro']
 
     async def cog_command_error(self, ctx: cmds.Context, error: Exception) -> None:
         assert type(ctx.command) == cmds.Command
@@ -190,6 +191,12 @@ class BoopCog(cmds.Cog, name='Boop'):
                 await ctx.send('https://tenor.com/view/bouncing-marisa-fumo-marisa-kirisame-touhou-fumo-gif-16962360816851147092')
             else:
                 await ctx.send(random.choice(self.MARISAD_GIFS))
+    @cmds.command("doro", help="Doro :3", usage="doro")
+    async def doro(self, ctx: cmds.Context) -> None:
+        if ctx.author == bot.user:
+            return
+        async with ctx.typing():
+            await ctx.send(random.choice(self.DORO))
 
     @cmds.command("teto", help="fatass teto", usage="teto")
     async def teto(self, ctx: cmds.Context) -> None:
