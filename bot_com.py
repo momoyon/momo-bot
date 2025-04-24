@@ -1,4 +1,4 @@
-import os
+import os, sys
 import logging as log
 import aiofile
 import asyncio
@@ -51,6 +51,18 @@ class InvalidParamTypeException(Exception):
     def __str__(self) -> str:
         return self.__repr__()
 
+class IntegerOutofRangeException(Exception):
+    def __init__(self, funcname: str, min: int, max: int, *args: object) -> None:
+        self.funcname = funcname
+        self.min = min
+        self.max = max
+
+    def __repr__(self) -> str:
+        return f"{self.funcname} wanted integer in range {self.min}..{self.max}"
+
+    def __str__(self) -> str:
+        return self.__repr__()
+
 # Classes
 class BotComCommand:
     def __init__(self, name: str, callback: Callable[[Any, List[Any]], Coroutine]) -> None:
@@ -71,7 +83,7 @@ def define_bot_com_command(name: str, callback: Callable[[Any, List[Any]], Corou
 class BotCom:
     def __init__(self, bot: cmds.Bot, bot_state: Any, filename: str) -> None:
         self.bot = bot
-        # NOTE: We assume the use passes a BotState as bot_state
+        # NOTE: We assume the user passes a BotState as bot_state
         self.bot_state = bot_state
         self.logger: log.Logger = log.getLogger(f"{os.path.basename(filename)}")
         self.filename = filename
@@ -234,3 +246,44 @@ async def cd(bot_com: Any, params: List[Any]):
 
     print(f"Cd'd to [{bot_com.bot_state.working_guild_idx}]{bot_com.bot_state.guild().name} [{bot_com.bot_state.working_channel_idx}]{bot_com.bot_state.guild().text_channels[bot_com.bot_state.working_channel_idx]}")
 define_bot_com_command("cd", cd)
+
+async def hist(bot_com: Any, params: List[Any]):
+    """
+    Prints N messages of the channel where the bot is.
+    First argument is N
+    """
+
+    assert(isinstance(bot_com, BotCom)), "Nigger you must pass a BotCom instance to this"
+    if len(params) != 1:
+        raise InsufficientParamsException("hist", ParamCount.EXACT, 1)
+
+    n: int = -1
+    try:
+        n = int(params[0])
+    except ValueError:
+        raise InvalidParamTypeException(type(int), type(n), "hist")
+
+    if n < 1:
+        raise IntegerOutofRangeException("hist", 1, 10)
+
+    if not bot_com.bot_state:
+        bot_com_logger.warning(f"Bot state is not initialized!")
+
+    bot: cmds.Bot = bot_com.bot
+    working_guild: discord.Guild = bot.guilds[bot_com.bot_state.working_guild_idx]
+    working_channel = working_guild.text_channels[bot_com.bot_state.working_channel_idx]
+    print("==================================================")
+    msgs = [message async for message in working_channel.history(limit=n)]
+    msgs = msgs[::-1]
+    for msg in msgs:
+        text = f"[{working_guild}][{working_channel}] <{msg.created_at}> {msg.author}: {msg.content}"
+        if len(msg.attachments) > 0:
+            text += " With attachment(s):"
+        for attachment in msg.attachments:
+            text += "\n"
+            text += f"{attachment.content_type}: {attachment.url}"
+        print(f"{text}")
+        print("--------------------------------------------------")
+    print("==================================================")
+
+define_bot_com_command("hist", hist)
