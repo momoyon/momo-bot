@@ -18,17 +18,13 @@ CONFIG_PATH="./config"
 
 RUN_DISCORD_BOT=True
 
-MIN_HTTP_BODY_LEN=2000
-
 SOURCE_CODE_FILENAME=f"{os.path.splitext(os.path.basename(__file__))[0]}.stable.py"
 
 MOMOYON_USER_ID=610964132899848208
 
-# TODO: Implement command parsing on_message_edit
 # TODO: Implement RPC
 
 # Helpers
-
 def read_config(filepath: str):
     with open(filepath, "r") as f:
         current_section = None
@@ -183,10 +179,10 @@ class BoopCog(cmds.Cog, name='Boop'):
 
     @cmds.command("marisad", help="Marisa. 1% Chance for something special :D", usage="marisad")
     async def marisad(self, ctx: cmds.Context) -> None:
-        # TODO: Make it so we dynamically search "marisad" on tenor and pick a random link
         if ctx.author == bot.user:
             return
         async with ctx.typing():
+            # TODO:Put seeds to each gif
             if random.random() <= 0.1:
                 await ctx.send('https://tenor.com/view/bouncing-marisa-fumo-marisa-kirisame-touhou-fumo-gif-16962360816851147092')
             else:
@@ -237,7 +233,12 @@ class DevCog(cmds.Cog, name='Dev'):
                 ":skull:",
         ]
         await ctx.send(random.choice(KYS_REPONSES))
-        await ctx.bot.close()
+        try:
+            await ctx.bot.close()
+            bot_logger.info(f"Bot connection closed")
+        except Exception as e:
+            bot_logger.error(f"Bot failed to close: {e}")
+
 
     @cmds.command("acd", help="Add data to a section in config", usage="acd <section> <data>")
     async def acd(self, ctx: cmds.Context, section: str, data: str):
@@ -348,7 +349,10 @@ async def on_message(msg):
     if msg.author == bot.user:
         return
 
-    # TODO: Handle msg.guild == None case
+    if msg.guild == None:
+        logger.error("msg.guild == None in on_message(); This should not happen!")
+        return
+
     text: str = f"[{msg.created_at}][{msg.guild.name}::{msg.channel.name}] {msg.author}: "
     if len(msg.content) > 0:
         text += f"'{msg.content}'"
