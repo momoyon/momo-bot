@@ -239,6 +239,28 @@ class DevCog(cmds.Cog, name='Dev'):
         await ctx.send(random.choice(KYS_REPONSES))
         await ctx.bot.close()
 
+    @cmds.command("react", help="Reacts to a message with an emoji")
+    async def react(self, ctx: cmds.Context, message_id: int, emoji: str):
+        msg = None
+        try:
+            msg: ds.Message = await ctx.fetch_message(message_id)
+        except Exception as e:
+            logging.error(f"Failed to fetch message: {e}")
+            return
+
+        if msg != None:
+            try:
+                await msg.add_reaction(emoji)
+            except Exception as e:
+                logging.error(f"Failed to react to message: {e}")
+                return
+
+        try:
+            await ctx.message.delete()
+        except Exception as e:
+            logging.error(f"Failed to delete message: {e}")
+            return
+
     @cmds.command("acd", help="Add data to a section in config", usage="acd <section> <data>")
     async def acd(self, ctx: cmds.Context, section: str, data: str):
 
