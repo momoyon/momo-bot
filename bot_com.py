@@ -65,18 +65,19 @@ class IntegerOutofRangeException(Exception):
 
 # Classes
 class BotComCommand:
-    def __init__(self, name: str, callback: Callable[[Any, List[Any]], Coroutine]) -> None:
+    def __init__(self, name: str, callback: Callable[[Any, List[Any]], Coroutine], _help: str) -> None:
+        self.help = _help
         self.name = name
         self.callback = callback
 
 bot_com_commands: dict[str, BotComCommand] = {}
 
-def define_bot_com_command(name: str, callback: Callable[[Any, List[Any]], Coroutine]) -> BotComCommand:
+def define_bot_com_command(name: str, callback: Callable[[Any, List[Any]], Coroutine], _help: str) -> BotComCommand:
     if name in bot_com_commands != None:
         bot_com_logger.debug(f"Bot command {name} is already defined!")
         return bot_com_commands[name]
 
-    bot_com_commands[name] = BotComCommand(name, callback)
+    bot_com_commands[name] = BotComCommand(name, callback, _help)
 
     return bot_com_commands[name]
 
@@ -127,20 +128,14 @@ class BotCom:
 # Defined Bot Com Commands
 # TODO: Find a way to make a decorator that will define a BotComCommand and add it to the map
 async def echo(bot_com: Any, params: List[Any]):
-    """
-    Just echos the given parameters to the stdout. Useful for testing BotComCommand
-    """
     assert(isinstance(bot_com, BotCom)), "Nigger you must pass a BotCom instance to this"
     if len(params) <= 0:
         raise InsufficientParamsException("echo", ParamCount.ATLEAST, 1)
     print("ECHO:", *params)
-define_bot_com_command("echo", echo)
+define_bot_com_command("echo", echo, "Just echos the given parameters to the stdout. Useful for testing BotComCommand")
 
 async def say(bot_com: Any, params: List[Any]):
     """
-    Sends a message to the pwd of the bot.
-
-    The first argument in the params is the message.
     """
     assert(isinstance(bot_com, BotCom)), "Nigger you must pass a BotCom instance to this"
     if len(params) <= 0:
@@ -157,14 +152,11 @@ async def say(bot_com: Any, params: List[Any]):
 
         await bot_com.bot_state.channel().send(args)
         bot_com.logger.info("Said")
-define_bot_com_command("say", say)
+define_bot_com_command("say", say, """Sends a message to the pwd of the bot.
+    The first argument in the params is the message.
+    """)
 
 async def ls(bot_com: Any, params: List[Any]):
-    """
-    Lists all the channels in all the guilds the bot belongs.
-
-    Takes optional parameter [index] to ls only the guilds[index]'s channels.
-    """
     assert(isinstance(bot_com, BotCom)), "Nigger you must pass a BotCom instance to this"
 
     bot: cmds.Bot = bot_com.bot
@@ -239,13 +231,13 @@ async def cd(bot_com: Any, params: List[Any]):
     bot_com.bot_state.working_channel_idx = ci
 
     print(f"Cd'd to [{bot_com.bot_state.working_guild_idx}]{bot_com.bot_state.guild().name} [{bot_com.bot_state.working_channel_idx}]{bot_com.bot_state.guild().text_channels[bot_com.bot_state.working_channel_idx]}")
-define_bot_com_command("cd", cd)
+define_bot_com_command("cd", cd, """Changes the current working guild and channel of the bot.
+
+    First param is the index of the guild.
+    Seconds param is the index of the channel.
+    """)
 
 async def hist(bot_com: Any, params: List[Any]):
-    """
-    Prints N messages of the channel where the bot is.
-    First argument is N
-    """
 
     assert(isinstance(bot_com, BotCom)), "Nigger you must pass a BotCom instance to this"
     if len(params) != 1:
@@ -280,4 +272,13 @@ async def hist(bot_com: Any, params: List[Any]):
         print("--------------------------------------------------")
     print("==================================================")
 
-define_bot_com_command("hist", hist)
+define_bot_com_command("hist", hist, """Prints N messages of the channel where the bot is.
+    First argument is N.
+    """)
+
+async def _help(bot_com: Any, params: List[Any]):
+    for bc_cmd_name in bot_com_commands.keys():
+        bc_cmd = bot_com_commands[bc_cmd_name]
+        print(f"    {bc_cmd_name}           - {bc_cmd.help}")
+
+define_bot_com_command("help", _help, "Prints all the defined bot_com commands.")
