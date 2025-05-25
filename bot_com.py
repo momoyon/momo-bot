@@ -191,27 +191,21 @@ async def ls(bot_com: Any, params: List[Any]):
             guild: discord.Guild = bot.guilds[gi]
             print(f"GUILD: [{gi:02}]->{guild.name}")
             ls_text_channels(guild)
-define_bot_com_command("ls", ls)
+define_bot_com_command("ls", ls, """Lists all the channels in all the guilds the bot belongs.
+
+    Takes optional parameter [index] to ls only the guilds[index]'s channels.
+    """)
 
 async def pwd(bot_com: Any, params: List[Any]):
-    """
-    Prints the current working guild and channel of the bot.
-    """
     assert(isinstance(bot_com, BotCom)), "Nigger you must pass a BotCom instance to this"
 
     bot: cmds.Bot = bot_com.bot
     working_guild: discord.Guild = bot.guilds[bot_com.bot_state.working_guild_idx]
 
     print(f"[{bot_com.bot_state.working_guild_idx}]{working_guild.name} [{bot_com.bot_state.working_channel_idx}]{working_guild.text_channels[bot_com.bot_state.working_channel_idx]}")
-define_bot_com_command("pwd", pwd)
+define_bot_com_command("pwd", pwd, "Prints the current working guild and channel of the bot.")
 
 async def cd(bot_com: Any, params: List[Any]):
-    """
-    Changes the current working guild and channel of the bot.
-
-    First param is the index of the guild.
-    Seconds param is the index of the channel.
-    """
     assert(isinstance(bot_com, BotCom)), "Nigger you must pass a BotCom instance to this"
 
     if len(params) < 2:
