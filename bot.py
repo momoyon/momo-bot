@@ -22,9 +22,25 @@ SOURCE_CODE_FILENAME=f"{os.path.splitext(os.path.basename(__file__))[0]}.stable.
 
 MOMOYON_USER_ID=610964132899848208
 
+DISCORD_HTTP_BODY_MAX_LEN=2000
+
+MAX_LOREM_N = 3
+
 # TODO: Implement RPC
 
+# TODO: Check for file change in CONFIG_PATH and reload if so
+
 # Helpers
+def debug_log_context(ctx: cmds.Context):
+    bot_logger.info(f'''Context:
+                    subcommand_passed: {ctx.subcommand_passed}
+                    command:           {ctx.command}
+                    command_failed:    {ctx.command_failed}
+                    current_argument:  {ctx.current_argument}
+                    current_parameter: {ctx.current_parameter}
+                    ''')
+
+
 def read_config(filepath: str):
     with open(filepath, "r") as f:
         current_section = None
@@ -90,6 +106,7 @@ class MiscCog(cmds.Cog, name="Miscellaneous"):
     def __init__(self, bot):
         self.bot = bot
         self.github_link = config['github_link'][0]
+        self.lorem_ipsums = config['lorem_ipsums']
 
     async def cog_command_error(self, ctx: cmds.Context, error: Exception) -> None:
         assert type(ctx.command) == cmds.Command
@@ -101,6 +118,14 @@ class MiscCog(cmds.Cog, name="Miscellaneous"):
         embed.description += f"\nUsage: {ctx.command.usage}"
         bot_logger.error(f"{self.qualified_name}Cog :: {type(error)}")
         await ctx.send(embed=embed)
+
+    @cmds.command("lorem", help="Spams a bunch of text *n* times to block off shit you don't wanna see.", usage="lorem [n] [force]")
+    async def lorem(self, ctx: cmds.Context, n: int = MAX_LOREM_N, force: bool = False):
+        if n > MAX_LOREM_N and not force:
+            await ctx.send(f"WARNING: Sending bunch of text {n} times is a lot! pass `true` to make sure!")
+            return
+        for i in range(n):
+            await ctx.send(random.choice(self.lorem_ipsums))
 
     @cmds.command("github", help="Github repo link of myself", usage="github")
     async def github(self, ctx: cmds.Context):
@@ -240,7 +265,7 @@ class DevCog(cmds.Cog, name='Dev'):
             bot_logger.error(f"Bot failed to close: {e}")
 
 
-    @cmds.command("react", help="Reacts to a message with an emoji")
+    @cmds.command("react", help="Reacts to a message with an emoji", usage="react <message_id> <emoji>")
     async def react(self, ctx: cmds.Context, message_id: int, emoji: str):
         msg = None
         try:
@@ -300,15 +325,18 @@ class DevCog(cmds.Cog, name='Dev'):
 
     @cmds.command("lsconfig", help="List the configuration", usage="lsconfig")
     async def lsconfig(self, ctx: cmds.Context):
-        msg = "```\n"
-        for section in config:
-            msg += f"[{section}]\n"
-            for d in config[section]:
-                msg += f"    {d}\n"
-        msg += "```"
+        try:
+            with open(CONFIG_PATH, 'rb') as f:
+                f.seek(0, os.SEEK_END)
+                filesize = f.tell()
+                bot_logger.info(f"Length of '{CONFIG_PATH}': {filesize}")
+                f.seek(0)
 
-        await ctx.send(msg)
-
+                file = ds.File(f, filename="config")
+                await ctx.send(file=file)
+        except FileNotFoundError:
+            bot_logger.error(f"File '{CONFIG}' doesn't exist!")
+            await ctx.send("ERROR: Cannot find a valid config file in CWD...", silent=True)
 
     @cmds.command("chan_id", help="Gets the id of the channel.", usage="chan_id")
     async def chan_id(self, ctx: cmds.Context) -> None:
