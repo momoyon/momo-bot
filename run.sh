@@ -21,7 +21,8 @@ fi
 
 pip install --upgrade pip
 
-pip install discord.py python-dotenv coloredlogs aiofile
+# Load packages from a common file so that run.bat also can use it
+pip install pynacl discord.py python-dotenv coloredlogs aiofile
 
 python ./bot.py $*
 
