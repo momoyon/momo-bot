@@ -499,14 +499,13 @@ async def on_message(msg):
             try:
                 trig_responses = config[f"{trig}_responses"]
             except Exception as e:
-                logger.error(f"Failed to find section `{trig}_responses` in config!")
-                return
+                logger.warning(f"Failed to find section `{trig}_responses` in config!")
             if len(trig_responses) <= 0:
-                logger.error(f"No responses in section `{trig}_responses`!")
-                return
-            # logger.info(f"Found responses for `{trig}`: {trig_responses}")
-            response = random.choice(trig_responses)
-            await msg.reply(response)
+                logger.warning(f"No responses in section `{trig}_responses`!")
+            else:
+                # logger.info(f"Found responses for `{trig}`: {trig_responses}")
+                response = random.choice(trig_responses)
+                await msg.reply(response)
 
     text: str = f"[{msg.created_at}][{msg.guild.name}::{msg.channel.name}] {msg.author}: "
     if len(msg.content) > 0:
