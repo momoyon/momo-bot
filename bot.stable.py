@@ -11,28 +11,89 @@ import logging, coloredlogs
 
 import bot_com
 
+import hydrus_api
+import hydrus_api.utils
+
+HYDRUS_NAME="test"
+HYDRUS_REQUIRED_PERMS = {
+        hydrus_api.Permission.IMPORT_URLS,
+        hydrus_api.Permission.SEARCH_FILES,
+        hydrus_api.Permission.IMPORT_FILES,
+}
+
+hydrus_client = None
+
 logging.basicConfig(level=logging.INFO)
 coloredlogs.install(level=logging.INFO)
 
-CONFIG_PATH="./config"
+CONFIG_PATH="./config.momo"
 
 RUN_DISCORD_BOT=True
-
-MIN_HTTP_BODY_LEN=2000
 
 SOURCE_CODE_FILENAME=f"{os.path.splitext(os.path.basename(__file__))[0]}.stable.py"
 
 MOMOYON_USER_ID=610964132899848208
 
-# TODO: Implement command parsing on_message_edit
+DISCORD_HTTP_BODY_MAX_LEN=2000
+
+MAX_LOREM_N = 3
+
 # TODO: Implement RPC
 
+# TODO: Check for file change in CONFIG_PATH and reload if so
+
 # Helpers
+def debug_log_context(ctx: cmds.Context):
+    logger.info(f'''Context:
+                    subcommand_passed: {ctx.subcommand_passed}
+                    command:           {ctx.command}
+                    command_failed:    {ctx.command_failed}
+                    current_argument:  {ctx.current_argument}
+                    current_parameter: {ctx.current_parameter}
+                    ''')
+# class Config:
+#     config = {}
+#     def __init__(self, file):
+#         self.read_from_file(file)
+#
+#     def read_from_file(self, file):
+#         try:
+#             with open(file, 'r') as f:
+#                 current_section = None
+#                 self.config = {}
+#                 for l in f.readlines():
+#                     l = l.removesuffix("\n")
+#                     # Ignore comments
+#                     if l.startswith("#") or len(l) <= 0:
+#                         continue
+#                     if l.startswith("["):
+#                         current_section = l.removeprefix("[").removesuffix("]")
+#                         # print(f"{current_section=}")
+#                     else:
+#                         if current_section == None:
+#                             logging.error("Data cannot be outside sections!")
+#                             exit(1)
+#                         else:
+#                             if current_section not in config:
+#                                 config[current_section] = []
+#                             # Check if key-value pair
+#                             colon_idx = l.find(':')
+#                             if colon_idx > -1:
+#                                 splitted = l.split(':')
+#                                 key = splitted[0]
+#                                 value = "" if len(splitted) < 2 else splitted[1]
+#                                 config[current_section].append((key, value))
+#                             else:
+#                                 config[current_section].append(l)
+#
+#
+#         except Exception as e:
+#             logger.error(f"Failed to load config from file: {e}")
 
 def read_config(filepath: str):
+    current_section = None
+    config = {}
     with open(filepath, "r") as f:
-        current_section = None
-        config = {}
         for l in f.readlines():
             l = l.removesuffix("\n")
             # Ignore comments
@@ -49,7 +110,7 @@ def read_config(filepath: str):
                     if current_section not in config:
                         config[current_section] = []
                     config[current_section].append(l)
-        return config
+    return config
 
 def copy_file(a: str, b: str):
     with open(a, "r") as og:
@@ -66,6 +127,7 @@ def write_config(config, filepath):
         for data in config[section]:
             f.write(data + "\n")
     f.close()
+
 config = {}
 intents = ds.Intents.default()
 intents.members = True
@@ -87,13 +149,14 @@ class BotState:
 
 bot_state: BotState | None = None
 bot = cmds.Bot('!!', intents=intents)
-bot_logger: logging.Logger = logging.getLogger("bot")
+logger: logging.Logger = logging.getLogger("bot")
 
 # COGS ###########################################
 class MiscCog(cmds.Cog, name="Miscellaneous"):
     def __init__(self, bot):
         self.bot = bot
         self.github_link = config['github_link'][0]
+        self.lorem_ipsums = config['lorem_ipsums']
 
     async def cog_command_error(self, ctx: cmds.Context, error: Exception) -> None:
         assert type(ctx.command) == cmds.Command
@@ -103,8 +166,16 @@ class MiscCog(cmds.Cog, name="Miscellaneous"):
         embed.description = f"Error: {error}"
 
         embed.description += f"\nUsage: {ctx.command.usage}"
-        bot_logger.error(f"{self.qualified_name}Cog :: {type(error)}")
+        logger.error(f"{self.qualified_name}Cog :: {type(error)}")
         await ctx.send(embed=embed)
+
+    @cmds.command("lorem", help="Spams a bunch of text *n* times to block off shit you don't wanna see.", usage="lorem [n] [force]")
+    async def lorem(self, ctx: cmds.Context, n: int = MAX_LOREM_N, force: bool = False):
+        if n > MAX_LOREM_N and not force:
+            await ctx.send(f"WARNING: Sending bunch of text {n} times is a lot! pass `true` to make sure!")
+            return
+        for i in range(n):
+            await ctx.send(random.choice(self.lorem_ipsums))
 
     @cmds.command("github", help="Github repo link of myself", usage="github")
     async def github(self, ctx: cmds.Context):
@@ -131,15 +202,15 @@ class MiscCog(cmds.Cog, name="Miscellaneous"):
             with open(SOURCE_CODE_FILENAME, 'rb') as f:
                 f.seek(0, os.SEEK_END)
                 filesize = f.tell()
-                bot_logger.info(f"Length of '{SOURCE_CODE_FILENAME}': {filesize}")
+                logger.info(f"Length of '{SOURCE_CODE_FILENAME}': {filesize}")
                 f.seek(0)
 
                 # Send the whole file as a file
                 file = ds.File(f, filename=SOURCE_CODE_FILENAME)
                 await ctx.send(file=file)
         except FileNotFoundError:
-            bot_logger.error(f"File '{SOURCE_CODE_FILENAME}' doesn't exist!")
-            bot_logger.info("Please run build.sh to copy bot.py -> bot.stable.py")
+            logger.error(f"File '{SOURCE_CODE_FILENAME}' doesn't exist!")
+            logger.info("Please run build.sh to copy bot.py -> bot.stable.py")
             await ctx.send("ERROR: It seems like i was deployed improperly...", silent=True)
 
     @cmds.command("poop", help="Hehe poop.", usage="poop")
@@ -161,6 +232,44 @@ class MiscCog(cmds.Cog, name="Miscellaneous"):
         else:
             await ctx.send(member.avatar)
 
+class HydrusCog(cmds.Cog, name='Hydrus'):
+    def __init__(self, bot):
+        self.bot = bot
+
+    async def cog_command_error(self, ctx: cmds.Context, error: Exception) -> None:
+        assert type(ctx.command) == cmds.Command
+
+        embed = ds.Embed(title="Error")
+        embed.description = ""
+        if isinstance(error, cmds.CommandInvokeError):
+            error = error.original
+
+        embed.description += f"\nUsage: {ctx.command.usage}"
+        logger.error(f"{self.qualified_name}Cog :: {type(error)}")
+        await ctx.send(embed=embed)
+
+    @cmds.command("hyd_rand", help="Random image from hydrus", usage="hyd_rand <tag>")
+    async def hyd_rand(self, ctx: cmds.Context, tag: str) -> None:
+        if ctx.author == bot.user:
+            return
+
+        # logger.info(f"TAG: {tag}")
+
+        if hydrus_client == None:
+            logger.error("Bro init the hydrus client!")
+            return
+
+        async with ctx.typing():
+            all_file_ids = hydrus_client.search_files([tag])["file_ids"]
+            if len(all_file_ids) <= 0:
+                await ctx.send(f"Couldn't find anything with the tag '{tag}'")
+                return
+
+            metadatas = hydrus_client.get_file_metadata(file_ids=all_file_ids)['metadata']
+            mtdt = random.choice(metadatas)
+            for url in mtdt['known_urls']:
+                await ctx.send(f"{url}")
+
 class BoopCog(cmds.Cog, name='Boop'):
     def __init__(self, bot):
         self.bot = bot
@@ -177,16 +286,15 @@ class BoopCog(cmds.Cog, name='Boop'):
             error = error.original
 
         embed.description += f"\nUsage: {ctx.command.usage}"
-        bot_logger.error(f"{self.qualified_name}Cog :: {type(error)}")
+        logger.error(f"{self.qualified_name}Cog :: {type(error)}")
         await ctx.send(embed=embed)
-
 
     @cmds.command("marisad", help="Marisa. 1% Chance for something special :D", usage="marisad")
     async def marisad(self, ctx: cmds.Context) -> None:
-        # TODO: Make it so we dynamically search "marisad" on tenor and pick a random link
         if ctx.author == bot.user:
             return
         async with ctx.typing():
+            # TODO:Put seeds to each gif
             if random.random() <= 0.1:
                 await ctx.send('https://tenor.com/view/bouncing-marisa-fumo-marisa-kirisame-touhou-fumo-gif-16962360816851147092')
             else:
@@ -223,7 +331,7 @@ class DevCog(cmds.Cog, name='Dev'):
         momoyon: ds.User = await bot.fetch_user(MOMOYON_USER_ID)
         if ctx.author.id != MOMOYON_USER_ID:
             await ctx.send(f"Only {momoyon.mention} can use dev commands")
-        bot_logger.error(f"{self.qualified_name}Cog :: {type(error)}")
+        logger.error(f"{self.qualified_name}Cog :: {type(error)}")
         await ctx.send(embed=embed)
 
     # TODO: This kills the discord bot, but doesnt kill the script itself.
@@ -237,7 +345,34 @@ class DevCog(cmds.Cog, name='Dev'):
                 ":skull:",
         ]
         await ctx.send(random.choice(KYS_REPONSES))
-        await ctx.bot.close()
+        try:
+            await ctx.bot.close()
+            logger.info(f"Bot connection closed")
+        except Exception as e:
+            logger.error(f"Bot failed to close: {e}")
+
+
+    @cmds.command("react", help="Reacts to a message with an emoji", usage="react <message_id> <emoji>")
+    async def react(self, ctx: cmds.Context, message_id: int, emoji: str):
+        msg = None
+        try:
+            msg: ds.Message = await ctx.fetch_message(message_id)
+        except Exception as e:
+            logging.error(f"Failed to fetch message: {e}")
+            return
+
+        if msg != None:
+            try:
+                await msg.add_reaction(emoji)
+            except Exception as e:
+                logging.error(f"Failed to react to message: {e}")
+                return
+
+        try:
+            await ctx.message.delete()
+        except Exception as e:
+            logging.error(f"Failed to delete message: {e}")
+            return
 
     @cmds.command("acd", help="Add data to a section in config", usage="acd <section> <data>")
     async def acd(self, ctx: cmds.Context, section: str, data: str):
@@ -277,15 +412,18 @@ class DevCog(cmds.Cog, name='Dev'):
 
     @cmds.command("lsconfig", help="List the configuration", usage="lsconfig")
     async def lsconfig(self, ctx: cmds.Context):
-        msg = "```\n"
-        for section in config:
-            msg += f"[{section}]\n"
-            for d in config[section]:
-                msg += f"    {d}\n"
-        msg += "```"
+        try:
+            with open(CONFIG_PATH, 'rb') as f:
+                f.seek(0, os.SEEK_END)
+                filesize = f.tell()
+                logger.info(f"Length of '{CONFIG_PATH}': {filesize}")
+                f.seek(0)
 
-        await ctx.send(msg)
-
+                file = ds.File(f, filename="config.txt")
+                await ctx.send(file=file)
+        except FileNotFoundError:
+            logger.error(f"File '{CONFIG}' doesn't exist!")
+            await ctx.send("ERROR: Cannot find a valid config file in CWD...", silent=True)
 
     @cmds.command("chan_id", help="Gets the id of the channel.", usage="chan_id")
     async def chan_id(self, ctx: cmds.Context) -> None:
@@ -296,7 +434,7 @@ class DevCog(cmds.Cog, name='Dev'):
         if isinstance(ctx.channel, ds.TextChannel):
             channel_name = ctx.channel.name
 
-        bot_logger.info(f"Channel id for '{channel_name}': {ctx.channel.id}")
+        logger.info(f"Channel id for '{channel_name}': {ctx.channel.id}")
         await ctx.send(f"{ctx.channel.id}")
 
 ##################################################
@@ -304,7 +442,7 @@ class DevCog(cmds.Cog, name='Dev'):
 
 @bot.event
 async def on_member_join(member: ds.Member):
-    bot_logger.info(f"New user joined to guild '{member.name}'")
+    logger.info(f"New user joined to guild '{member.name}'")
 
     embed = ds.Embed(title="Greetings")
     embed.description = "What's up nigger"
@@ -314,7 +452,7 @@ async def on_member_join(member: ds.Member):
 # TODO: Documentation says this event may be called more than once, do we care about that?
 @bot.event
 async def on_ready():
-    bot_logger.info(f'{bot.user} logged in!')
+    logger.info(f'{bot.user} logged in!')
 
     global bot_state
     # NOTE: Hard-coded guild and channel ids of my private server...
@@ -325,30 +463,51 @@ async def on_ready():
     try:
         spawn_guild_idx = bot.guilds.index(bot.get_guild(SPAWN_GUILD_ID))
     except ValueError:
-        bot_logger.warning(f"Spawn Guild with id'{SPAWN_GUILD_ID}' not found!")
+        logger.warning(f"Spawn Guild with id'{SPAWN_GUILD_ID}' not found!")
 
     try:
         spawn_channel_idx = bot.guilds[spawn_guild_idx].text_channels.index(cast(ds.TextChannel, bot.get_channel(SPAWN_CHANNEL_ID)))
     except ValueError:
-        bot_logger.warning(f"Spawn Channel with id'{SPAWN_CHANNEL_ID}' not found!")
+        logger.warning(f"Spawn Channel with id'{SPAWN_CHANNEL_ID}' not found!")
 
     if spawn_guild_idx != -1 and spawn_channel_idx != -1:
 
         bot_state = BotState(bot, spawn_guild_idx, spawn_channel_idx)
         guild: ds.Guild = bot.guilds[spawn_guild_idx]
         channel: ds.TextChannel = guild.text_channels[spawn_channel_idx]
-        bot_logger.info(f"Bot spawned in '{channel.name}' of guild '{guild.name}'")
+        logger.info(f"Bot spawned in '{channel.name}' of guild '{guild.name}'")
         await channel.send("Spawned!", delete_after=10.0)
 
     for g in bot.guilds:
-        bot_logger.info(f"    - Bot in {g.name} with id {g.id}")
+        logger.info(f"    - Bot in {g.name} with id {g.id}")
 
 @bot.event
 async def on_message(msg):
+    global config
     if msg.author == bot.user:
         return
 
-    # TODO: Handle msg.guild == None case
+    if msg.guild == None:
+        logger.error("msg.guild == None in on_message(); This should not happen!")
+        return
+
+    # Triggers
+    for trig in config["triggers"]:
+        # logger.info(f"Checking for trigger `{trig}`")
+        if msg.content.find(trig) >= 0:
+            trig_responses = []
+            try:
+                trig_responses = config[f"{trig}_responses"]
+            except Exception as e:
+                logger.error(f"Failed to find section `{trig}_responses` in config!")
+                return
+            if len(trig_responses) <= 0:
+                logger.error(f"No responses in section `{trig}_responses`!")
+                return
+            # logger.info(f"Found responses for `{trig}`: {trig_responses}")
+            response = random.choice(trig_responses)
+            await msg.reply(response)
+
     text: str = f"[{msg.created_at}][{msg.guild.name}::{msg.channel.name}] {msg.author}: "
     if len(msg.content) > 0:
         text += f"'{msg.content}'"
@@ -365,7 +524,7 @@ async def on_message(msg):
                 text += "\n"
                 text += f"{attachment.content_type}: {attachment.url}"
 
-    bot_logger.info(text)
+    logger.info(text)
 
     await bot.process_commands(msg)
 
@@ -374,18 +533,25 @@ async def add_cogs():
     coroutines.append(bot.add_cog(MiscCog(bot)))
     coroutines.append(bot.add_cog(BoopCog(bot)))
     coroutines.append(bot.add_cog(DevCog(bot)))
+    coroutines.append(bot.add_cog(HydrusCog(bot)))
 
     tasks = [asyncio.create_task(coroutine) for coroutine in coroutines]
 
     await asyncio.gather(*tasks)
 
 async def main():
-    global MOMOYON_USER_ID
-
-    await add_cogs()
+    global MOMOYON_USER_ID, hydrus_client
 
     load_dotenv()
     token = os.environ["TOKEN"]
+
+    try:
+        hydrus_client = hydrus_api.Client(os.environ["HYDRUS_API_KEY"])
+        logger.info(f"Hydrus Client API version: v{hydrus_client.VERSION} | Endpoint API version: v{hydrus_client.get_api_version()['version']}")
+    except Exception as e:
+        logger.error(f"Failed to init hydrus client!: {e}")
+
+    await add_cogs()
 
     if not MOMOYON_USER_ID:
         try:
