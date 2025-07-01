@@ -9,6 +9,9 @@ import asyncio
 
 import logging, coloredlogs
 
+import requests
+from bs4 import BeautifulSoup
+
 import bot_com
 
 import hydrus_api
@@ -51,44 +54,17 @@ def debug_log_context(ctx: cmds.Context):
                     current_argument:  {ctx.current_argument}
                     current_parameter: {ctx.current_parameter}
                     ''')
-# class Config:
-#     config = {}
-#     def __init__(self, file):
-#         self.read_from_file(file)
-#
-#     def read_from_file(self, file):
-#         try:
-#             with open(file, 'r') as f:
-#                 current_section = None
-#                 self.config = {}
-#                 for l in f.readlines():
-#                     l = l.removesuffix("\n")
-#                     # Ignore comments
-#                     if l.startswith("#") or len(l) <= 0:
-#                         continue
-#                     if l.startswith("["):
-#                         current_section = l.removeprefix("[").removesuffix("]")
-#                         # print(f"{current_section=}")
-#                     else:
-#                         if current_section == None:
-#                             logging.error("Data cannot be outside sections!")
-#                             exit(1)
-#                         else:
-#                             if current_section not in config:
-#                                 config[current_section] = []
-#                             # Check if key-value pair
-#                             colon_idx = l.find(':')
-#                             if colon_idx > -1:
-#                                 splitted = l.split(':')
-#                                 key = splitted[0]
-#                                 value = "" if len(splitted) < 2 else splitted[1]
-#                                 config[current_section].append((key, value))
-#                             else:
-#                                 config[current_section].append(l)
-#
-#
-#         except Exception as e:
-#             logger.error(f"Failed to load config from file: {e}")
+
+def get_gif_from_tenor(tenor_search: str):
+    page = requests.get(f"https://tenor.com/search/{tenor_search}-gifs")
+    soup = BeautifulSoup(page.content, 'html.parser')
+    gifs = []
+    for t in soup.find_all():
+        if t.img and t.img['src'].find("gif") > -1:
+            gifs.append(t.img['src'])
+
+    # logger.info(f"GIFS: {gifs}")
+    return gifs
 
 def read_config(filepath: str):
     current_section = None
@@ -274,7 +250,6 @@ class BoopCog(cmds.Cog, name='Boop'):
     def __init__(self, bot):
         self.bot = bot
         self.MARISAD_GIFS = config['marisad_gifs']
-        self.TETO_GIFS = config['teto_gifs']
         self.DORO = config['doro']
 
     async def cog_command_error(self, ctx: cmds.Context, error: Exception) -> None:
@@ -306,12 +281,16 @@ class BoopCog(cmds.Cog, name='Boop'):
         async with ctx.typing():
             await ctx.send(random.choice(self.DORO))
 
-    @cmds.command("teto", help="fatass teto", usage="teto")
-    async def teto(self, ctx: cmds.Context) -> None:
+    @cmds.command("miku", help="omg mikuu", usage="miku")
+    async def miku(self, ctx: cmds.Context) -> None:
         if ctx.author == bot.user:
             return
         async with ctx.typing():
-            await ctx.send(random.choice(self.TETO_GIFS))
+            gifs = get_gif_from_tenor("hatsune miku")
+            if len(gifs) <= 0:
+                await ctx.send("Couldn't find any miku gifs from tenor")
+            else:
+                await ctx.send(random.choice(gifs))
 
 class DevCog(cmds.Cog, name='Dev'):
     def __init__(self, bot):
@@ -333,6 +312,12 @@ class DevCog(cmds.Cog, name='Dev'):
             await ctx.send(f"Only {momoyon.mention} can use dev commands")
         logger.error(f"{self.qualified_name}Cog :: {type(error)}")
         await ctx.send(embed=embed)
+
+    @cmds.command("tenor", help="Random gif from tenor", usage="tenor <search>")
+    async def tenor(self, ctx, search: str):
+        gifs = get_gif_from_tenor(search)
+
+        await ctx.send(f"{random.choice(gifs)}")
 
     # TODO: This kills the discord bot, but doesnt kill the script itself.
     @cmds.command("kys", help="I will Krill Myself :)")
@@ -538,17 +523,21 @@ async def add_cogs():
 
     await asyncio.gather(*tasks)
 
-async def main():
-    global MOMOYON_USER_ID, hydrus_client
-
+def init():
     load_dotenv()
-    token = os.environ["TOKEN"]
-
     try:
         hydrus_client = hydrus_api.Client(os.environ["HYDRUS_API_KEY"])
         logger.info(f"Hydrus Client API version: v{hydrus_client.VERSION} | Endpoint API version: v{hydrus_client.get_api_version()['version']}")
     except Exception as e:
         logger.error(f"Failed to init hydrus client!: {e}")
+
+def cleanup():
+    pass
+
+async def main():
+    global MOMOYON_USER_ID, hydrus_client, driver
+
+    token = os.environ["TOKEN"]
 
     await add_cogs()
 
@@ -585,7 +574,11 @@ async def main():
 if __name__ == '__main__':
     config = read_config(CONFIG_PATH)
 
+    init()
+
     try:
         asyncio.run(main())
     except KeyboardInterrupt as ki:
-        exit(0)
+        pass
+
+    cleanup()
