@@ -274,12 +274,17 @@ class BoopCog(cmds.Cog, name='Boop'):
                 await ctx.send('https://tenor.com/view/bouncing-marisa-fumo-marisa-kirisame-touhou-fumo-gif-16962360816851147092')
             else:
                 await ctx.send(random.choice(self.MARISAD_GIFS))
+
     @cmds.command("doro", help="Doro :3", usage="doro")
     async def doro(self, ctx: cmds.Context) -> None:
         if ctx.author == bot.user:
             return
         async with ctx.typing():
-            await ctx.send(random.choice(self.DORO))
+            gifs = get_gif_from_tenor("dorothy doro")
+            if len(gifs) <= 0:
+                await ctx.send("Couldn't find any dorothy doro from tenor")
+            else:
+                await ctx.send(random.choice(gifs))
 
     @cmds.command("miku", help="omg mikuu", usage="miku")
     async def miku(self, ctx: cmds.Context) -> None:
@@ -466,6 +471,10 @@ async def on_ready():
     for g in bot.guilds:
         logger.info(f"    - Bot in {g.name} with id {g.id}")
 
+def can_trigger(msg):
+    msg_content = msg.content.lower()
+    return msg_content.find(".gif") <= -1 and not msg_content.startswith("!!") and msg_content.find("tenor") <= -1
+
 @bot.event
 async def on_message(msg):
     global config
@@ -477,20 +486,21 @@ async def on_message(msg):
         return
 
     # Triggers
-    for trig in config["triggers"]:
-        # logger.info(f"Checking for trigger `{trig}`")
-        if msg.content.find(trig) >= 0:
-            trig_responses = []
-            try:
-                trig_responses = config[f"{trig}_responses"]
-            except Exception as e:
-                logger.warning(f"Failed to find section `{trig}_responses` in config!")
-            if len(trig_responses) <= 0:
-                logger.warning(f"No responses in section `{trig}_responses`!")
-            else:
-                # logger.info(f"Found responses for `{trig}`: {trig_responses}")
-                response = random.choice(trig_responses)
-                await msg.reply(response)
+    if can_trigger(msg):
+        for trig in config["triggers"]:
+            # logger.info(f"Checking for trigger `{trig}`")
+            if msg.content.lower().find(trig) >= 0:
+                trig_responses = []
+                try:
+                    trig_responses = config[f"{trig}_responses"]
+                except Exception as e:
+                    logger.warning(f"Failed to find section `{trig}_responses` in config!")
+                if len(trig_responses) <= 0:
+                    logger.warning(f"No responses in section `{trig}_responses`!")
+                else:
+                    # logger.info(f"Found responses for `{trig}`: {trig_responses}")
+                    response = random.choice(trig_responses)
+                    await msg.reply(response)
 
     text: str = f"[{msg.created_at}][{msg.guild.name}::{msg.channel.name}] {msg.author}: "
     if len(msg.content) > 0:
