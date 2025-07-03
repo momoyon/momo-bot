@@ -264,6 +264,12 @@ class BoopCog(cmds.Cog, name='Boop'):
         logger.error(f"{self.qualified_name}Cog :: {type(error)}")
         await ctx.send(embed=embed)
 
+    @cmds.command("tenor", help="Random gif from tenor", usage="tenor <search>")
+    async def tenor(self, ctx, search: str):
+        gifs = get_gif_from_tenor(search)
+
+        await ctx.send(f"{random.choice(gifs)}")
+
     @cmds.command("marisad", help="Marisa. 1% Chance for something special :D", usage="marisad")
     async def marisad(self, ctx: cmds.Context) -> None:
         if ctx.author == bot.user:
@@ -317,12 +323,6 @@ class DevCog(cmds.Cog, name='Dev'):
             await ctx.send(f"Only {momoyon.mention} can use dev commands")
         logger.error(f"{self.qualified_name}Cog :: {type(error)}")
         await ctx.send(embed=embed)
-
-    @cmds.command("tenor", help="Random gif from tenor", usage="tenor <search>")
-    async def tenor(self, ctx, search: str):
-        gifs = get_gif_from_tenor(search)
-
-        await ctx.send(f"{random.choice(gifs)}")
 
     # TODO: This kills the discord bot, but doesnt kill the script itself.
     @cmds.command("kys", help="I will Krill Myself :)")
@@ -473,6 +473,7 @@ async def on_ready():
 
 def can_trigger(msg):
     msg_content = msg.content.lower()
+
     return msg_content.find(".gif") <= -1 and not msg_content.startswith("!!") and msg_content.find("tenor") <= -1
 
 @bot.event
