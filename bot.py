@@ -41,6 +41,8 @@ DISCORD_HTTP_BODY_MAX_LEN=2000
 
 MAX_LOREM_N = 3
 
+user_last_commands = {}
+
 # TODO: Implement RPC
 
 # TODO: Check for file change in CONFIG_PATH and reload if so
@@ -491,6 +493,20 @@ def can_trigger(msg):
 async def on_message(msg):
     global config
     if msg.author == bot.user:
+        return
+
+    # TODO: Put prefix to a variable
+    if msg.content.startswith("!!") and msg.content != "!!!":
+        user_last_commands[msg.author] = msg
+
+    if msg.content == "!!!":
+        if msg.author not in user_last_commands:
+            await msg.reply("You don't have any last commands")
+            return
+
+        logger.info(f"{msg.author}'s last command: {user_last_commands[msg.author]}")
+
+        await bot.process_commands(user_last_commands[msg.author])
         return
 
     if msg.guild == None:
