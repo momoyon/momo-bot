@@ -303,6 +303,17 @@ class BoopCog(cmds.Cog, name='Boop'):
             else:
                 await ctx.send(random.choice(gifs))
 
+    @cmds.command("touhou", help="Touhou Project", usage="touhou")
+    async def touhou(self, ctx: cmds.Context) -> None:
+        if ctx.author == bot.user:
+            return
+        async with ctx.typing():
+            gifs = get_gif_from_tenor(random.choice(["Touhou Project", "touhou", "2hu", "touhou fumo", "touhou sex"]))
+            if len(gifs) <= 0:
+                await ctx.send("Couldn't find any touhou gifs from tenor")
+            else:
+                await ctx.send(random.choice(gifs))
+
 class DevCog(cmds.Cog, name='Dev'):
     def __init__(self, bot):
         self.bot = bot
