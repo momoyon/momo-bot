@@ -2,7 +2,7 @@ import discord as ds
 from discord import FFmpegPCMAudio
 import discord.ext.commands as cmds
 import discord.ext.tasks as tasks
-import os, random
+import os, random, sys
 from typing import List, Any, cast
 from dotenv import load_dotenv
 import asyncio
@@ -17,7 +17,7 @@ import bot_com
 import hydrus_api
 import hydrus_api.utils
 
-HYDRUS_NAME="test"
+HYDRUS_NAME="hydrus"
 HYDRUS_REQUIRED_PERMS = {
         hydrus_api.Permission.IMPORT_URLS,
         hydrus_api.Permission.SEARCH_FILES,
@@ -113,6 +113,8 @@ intents.presences = True
 intents.message_content = True
 # intents.manage_messages = True
 
+testing = False
+
 class BotState:
     def __init__(self, bot: cmds.Bot, working_guild_id: int, working_channel_idx: int) -> None:
         self.bot = bot
@@ -125,8 +127,20 @@ class BotState:
     def channel(self) -> ds.TextChannel:
         return self.guild().text_channels[self.working_channel_idx]
 
+
+prefix = "!!"
+def determine_prefix(bot, msg):
+    global prefix, testing
+    # logger.info(f"DETERMINE PREFIX ARGS: {sys.argv}")
+    if testing:
+        prefix = "@@"
+    else:
+        prefix = "!!"
+
+    return prefix
+
 bot_state: BotState | None = None
-bot = cmds.Bot('!!', intents=intents)
+bot = cmds.Bot(command_prefix=determine_prefix, intents=intents)
 logger: logging.Logger = logging.getLogger("bot")
 
 # COGS ###########################################
@@ -263,7 +277,7 @@ class BoopCog(cmds.Cog, name='Boop'):
             error = error.original
 
         embed.description += f"\nUsage: {ctx.command.usage}"
-        logger.error(f"{self.qualified_name}Cog :: {type(error)}")
+        logger.error(f"{self.qualified_name}Cog :: {error}")
         await ctx.send(embed=embed)
 
     @cmds.command("tenor", help="Random gif from tenor", usage="tenor <search>")
@@ -487,7 +501,7 @@ async def on_ready():
 def can_trigger(msg):
     msg_content = msg.content.lower()
 
-    return msg_content.find(".gif") <= -1 and not msg_content.startswith("!!") and msg_content.find("tenor") <= -1
+    return msg_content.find(".gif") <= -1 and not msg_content.startswith(prefix) and msg_content.find("tenor") <= -1
 
 @bot.event
 async def on_message(msg):
@@ -495,11 +509,10 @@ async def on_message(msg):
     if msg.author == bot.user:
         return
 
-    # TODO: Put prefix to a variable
-    if msg.content.startswith("!!") and msg.content != "!!!":
+    if msg.content.startswith(prefix) and msg.content != f"{prefix}!":
         user_last_commands[msg.author] = msg
 
-    if msg.content == "!!!":
+    if msg.content == f"{prefix}!":
         if msg.author not in user_last_commands:
             await msg.reply("You don't have any last commands")
             return
@@ -573,9 +586,23 @@ def cleanup():
     pass
 
 async def main():
-    global MOMOYON_USER_ID, hydrus_client, driver
+    global MOMOYON_USER_ID, hydrus_client, driver, bot, prefix, testing
 
-    token = os.environ["TOKEN"]
+    program = sys.argv.pop(0)
+    if len(sys.argv) > 0:
+        arg = sys.argv.pop(0)
+        if arg == "test":
+            testing = True
+            prefix = "@@"
+            bot.prefix = prefix
+
+    if testing:
+        logger.info("Starting TESTING BOT")
+    else:
+        logger.info("Starting DEPLOYMENT BOT")
+
+
+    token = os.environ["TESTING_TOKEN"] if testing else os.environ["TOKEN"]
 
     await add_cogs()
 
@@ -610,6 +637,7 @@ async def main():
     await asyncio.gather(*_tasks)
 
 if __name__ == '__main__':
+
     config = read_config(CONFIG_PATH)
 
     init()

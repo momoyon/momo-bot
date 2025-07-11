@@ -51,6 +51,6 @@ python -m pip install --upgrade pip
 REM Load packages from a common file so that run.sh also can use it
 pip install pynacl discord.py python-dotenv coloredlogs aiofile requests hydrus-api bs4
 
-python .\bot.py !*
+python .\bot.py %*
 
 deactivate
