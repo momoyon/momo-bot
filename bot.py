@@ -134,7 +134,7 @@ def determine_prefix(bot, msg):
     global prefix, testing
     # logger.info(f"DETERMINE PREFIX ARGS: {sys.argv}")
     if testing:
-        prefix = "@@"
+        prefix = "$$"
     else:
         prefix = "!!"
 
