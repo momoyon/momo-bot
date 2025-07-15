@@ -9,13 +9,15 @@ import asyncio
 
 import logging, coloredlogs
 
-import requests
+import requests, json
 from bs4 import BeautifulSoup
 
 import bot_com
 
 import hydrus_api
 import hydrus_api.utils
+
+load_dotenv()
 
 HYDRUS_NAME="hydrus"
 HYDRUS_REQUIRED_PERMS = {
@@ -28,6 +30,10 @@ hydrus_client = None
 
 logging.basicConfig(level=logging.INFO)
 coloredlogs.install(level=logging.INFO)
+
+TENOR_API_KEY = os.environ['TENOR_API_KEY']
+TENOR_LIMIT = 1000
+TENOR_CKEY = "discordBotTenorApi" # Same name as the project name in google cloud console.
 
 CONFIG_PATH="./config.momo"
 
@@ -58,14 +64,10 @@ def debug_log_context(ctx: cmds.Context):
                     ''')
 
 def get_gif_from_tenor(tenor_search: str):
-    page = requests.get(f"https://tenor.com/search/{tenor_search}-gifs")
-    soup = BeautifulSoup(page.content, 'html.parser')
-    gifs = []
-    for t in soup.find_all():
-        if t.img and t.img['src'].find("gif") > -1:
-            gifs.append(t.img['src'])
+    r = requests.get("https://tenor.googleapis.com/v2/search?q=%s&key=%s&client_key=%s&limit=%s&media_filter=gif&random=true" % (tenor_search, TENOR_API_KEY, TENOR_CKEY, TENOR_LIMIT))
 
-    # logger.info(f"GIFS: {gifs}")
+    if r.status_code == 200:
+        gifs = [gif_obj['url'] for gif_obj in json.loads(r.content)['results']]
     return gifs
 
 def read_config(filepath: str):
@@ -126,7 +128,6 @@ class BotState:
 
     def channel(self) -> ds.TextChannel:
         return self.guild().text_channels[self.working_channel_idx]
-
 
 prefix = "!!"
 def determine_prefix(bot, msg):
@@ -575,7 +576,6 @@ async def add_cogs():
     await asyncio.gather(*tasks)
 
 def init():
-    load_dotenv()
     try:
         hydrus_client = hydrus_api.Client(os.environ["HYDRUS_API_KEY"])
         logger.info(f"Hydrus Client API version: v{hydrus_client.VERSION} | Endpoint API version: v{hydrus_client.get_api_version()['version']}")
@@ -637,7 +637,6 @@ async def main():
     await asyncio.gather(*_tasks)
 
 if __name__ == '__main__':
-
     config = read_config(CONFIG_PATH)
 
     init()
