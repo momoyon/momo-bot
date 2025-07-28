@@ -149,6 +149,7 @@ class MiscCog(cmds.Cog, name="Miscellaneous"):
     def __init__(self, bot):
         self.bot = bot
         self.github_link = config['github_link'][0]
+        self.website_link = config['website_link'][0]
         self.lorem_ipsums = config['lorem_ipsums']
 
     async def cog_command_error(self, ctx: cmds.Context, error: Exception) -> None:
@@ -173,6 +174,10 @@ class MiscCog(cmds.Cog, name="Miscellaneous"):
     @cmds.command("github", help="Github repo link of myself", usage="github")
     async def github(self, ctx: cmds.Context):
         await ctx.send(f"{self.github_link}")
+
+    @cmds.command("website", help="My website", usage="website")
+    async def github(self, ctx: cmds.Context):
+        await ctx.send(f"{self.website_link}")
 
     @cmds.command("swapcase", help="Inverts the case of the input.", usage="swap <text>")
     async def swapcase(self, ctx: cmds.Context, *, text: str):
