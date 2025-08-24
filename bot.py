@@ -357,6 +357,12 @@ class DevCog(cmds.Cog, name='Dev'):
         logger.error(f"{self.qualified_name}Cog :: {type(error)}")
         await ctx.send(embed=embed)
 
+    @cmds.command("req", help="Performs a web request")
+    async def req(self, ctx, url: str):
+        response = requests.get(url)
+
+        await ctx.send(f"Got response: `{response.content.decode('utf-8')}` with code **{response.status_code}**")
+
     # TODO: This kills the discord bot, but doesnt kill the script itself.
     @cmds.command("kys", help="I will Krill Myself :)")
     async def kys(self, ctx):
