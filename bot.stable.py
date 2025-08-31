@@ -2,19 +2,24 @@ import discord as ds
 from discord import FFmpegPCMAudio
 import discord.ext.commands as cmds
 import discord.ext.tasks as tasks
-import os, random
+import os, random, sys
 from typing import List, Any, cast
 from dotenv import load_dotenv
 import asyncio
 
 import logging, coloredlogs
 
+import requests, json
+from bs4 import BeautifulSoup
+
 import bot_com
 
 import hydrus_api
 import hydrus_api.utils
 
-HYDRUS_NAME="test"
+load_dotenv()
+
+HYDRUS_NAME="hydrus"
 HYDRUS_REQUIRED_PERMS = {
         hydrus_api.Permission.IMPORT_URLS,
         hydrus_api.Permission.SEARCH_FILES,
@@ -25,6 +30,10 @@ hydrus_client = None
 
 logging.basicConfig(level=logging.INFO)
 coloredlogs.install(level=logging.INFO)
+
+TENOR_API_KEY = os.environ['TENOR_API_KEY']
+TENOR_LIMIT = 1000
+TENOR_CKEY = "discordBotTenorApi" # Same name as the project name in google cloud console.
 
 CONFIG_PATH="./config.momo"
 
@@ -37,6 +46,8 @@ MOMOYON_USER_ID=610964132899848208
 DISCORD_HTTP_BODY_MAX_LEN=2000
 
 MAX_LOREM_N = 3
+
+user_last_commands = {}
 
 # TODO: Implement RPC
 
@@ -51,44 +62,13 @@ def debug_log_context(ctx: cmds.Context):
                     current_argument:  {ctx.current_argument}
                     current_parameter: {ctx.current_parameter}
                     ''')
-# class Config:
-#     config = {}
-#     def __init__(self, file):
-#         self.read_from_file(file)
-#
-#     def read_from_file(self, file):
-#         try:
-#             with open(file, 'r') as f:
-#                 current_section = None
-#                 self.config = {}
-#                 for l in f.readlines():
-#                     l = l.removesuffix("\n")
-#                     # Ignore comments
-#                     if l.startswith("#") or len(l) <= 0:
-#                         continue
-#                     if l.startswith("["):
-#                         current_section = l.removeprefix("[").removesuffix("]")
-#                         # print(f"{current_section=}")
-#                     else:
-#                         if current_section == None:
-#                             logging.error("Data cannot be outside sections!")
-#                             exit(1)
-#                         else:
-#                             if current_section not in config:
-#                                 config[current_section] = []
-#                             # Check if key-value pair
-#                             colon_idx = l.find(':')
-#                             if colon_idx > -1:
-#                                 splitted = l.split(':')
-#                                 key = splitted[0]
-#                                 value = "" if len(splitted) < 2 else splitted[1]
-#                                 config[current_section].append((key, value))
-#                             else:
-#                                 config[current_section].append(l)
-#
-#
-#         except Exception as e:
-#             logger.error(f"Failed to load config from file: {e}")
+
+def get_gif_from_tenor(tenor_search: str):
+    r = requests.get("https://tenor.googleapis.com/v2/search?q=%s&key=%s&client_key=%s&limit=%s&media_filter=gif&random=true" % (tenor_search, TENOR_API_KEY, TENOR_CKEY, TENOR_LIMIT))
+
+    if r.status_code == 200:
+        gifs = [gif_obj['url'] for gif_obj in json.loads(r.content)['results']]
+    return gifs
 
 def read_config(filepath: str):
     current_section = None
@@ -135,6 +115,8 @@ intents.presences = True
 intents.message_content = True
 # intents.manage_messages = True
 
+testing = False
+
 class BotState:
     def __init__(self, bot: cmds.Bot, working_guild_id: int, working_channel_idx: int) -> None:
         self.bot = bot
@@ -147,8 +129,19 @@ class BotState:
     def channel(self) -> ds.TextChannel:
         return self.guild().text_channels[self.working_channel_idx]
 
+prefix = "!!"
+def determine_prefix(bot, msg):
+    global prefix, testing
+    # logger.info(f"DETERMINE PREFIX ARGS: {sys.argv}")
+    if testing:
+        prefix = "$$"
+    else:
+        prefix = "!!"
+
+    return prefix
+
 bot_state: BotState | None = None
-bot = cmds.Bot('!!', intents=intents)
+bot = cmds.Bot(command_prefix=determine_prefix, intents=intents)
 logger: logging.Logger = logging.getLogger("bot")
 
 # COGS ###########################################
@@ -156,6 +149,7 @@ class MiscCog(cmds.Cog, name="Miscellaneous"):
     def __init__(self, bot):
         self.bot = bot
         self.github_link = config['github_link'][0]
+        self.website_link = config['website_link'][0]
         self.lorem_ipsums = config['lorem_ipsums']
 
     async def cog_command_error(self, ctx: cmds.Context, error: Exception) -> None:
@@ -180,6 +174,10 @@ class MiscCog(cmds.Cog, name="Miscellaneous"):
     @cmds.command("github", help="Github repo link of myself", usage="github")
     async def github(self, ctx: cmds.Context):
         await ctx.send(f"{self.github_link}")
+
+    @cmds.command("website", help="My website", usage="website")
+    async def github(self, ctx: cmds.Context):
+        await ctx.send(f"{self.website_link}")
 
     @cmds.command("swapcase", help="Inverts the case of the input.", usage="swap <text>")
     async def swapcase(self, ctx: cmds.Context, *, text: str):
@@ -274,7 +272,6 @@ class BoopCog(cmds.Cog, name='Boop'):
     def __init__(self, bot):
         self.bot = bot
         self.MARISAD_GIFS = config['marisad_gifs']
-        self.TETO_GIFS = config['teto_gifs']
         self.DORO = config['doro']
 
     async def cog_command_error(self, ctx: cmds.Context, error: Exception) -> None:
@@ -286,8 +283,14 @@ class BoopCog(cmds.Cog, name='Boop'):
             error = error.original
 
         embed.description += f"\nUsage: {ctx.command.usage}"
-        logger.error(f"{self.qualified_name}Cog :: {type(error)}")
+        logger.error(f"{self.qualified_name}Cog :: {error}")
         await ctx.send(embed=embed)
+
+    @cmds.command("tenor", help="Random gif from tenor", usage="tenor <search>")
+    async def tenor(self, ctx, search: str):
+        gifs = get_gif_from_tenor(search)
+
+        await ctx.send(f"{random.choice(gifs)}")
 
     @cmds.command("marisad", help="Marisa. 1% Chance for something special :D", usage="marisad")
     async def marisad(self, ctx: cmds.Context) -> None:
@@ -299,19 +302,39 @@ class BoopCog(cmds.Cog, name='Boop'):
                 await ctx.send('https://tenor.com/view/bouncing-marisa-fumo-marisa-kirisame-touhou-fumo-gif-16962360816851147092')
             else:
                 await ctx.send(random.choice(self.MARISAD_GIFS))
+
     @cmds.command("doro", help="Doro :3", usage="doro")
     async def doro(self, ctx: cmds.Context) -> None:
         if ctx.author == bot.user:
             return
         async with ctx.typing():
-            await ctx.send(random.choice(self.DORO))
+            gifs = get_gif_from_tenor("dorothy doro")
+            if len(gifs) <= 0:
+                await ctx.send("Couldn't find any dorothy doro from tenor")
+            else:
+                await ctx.send(random.choice(gifs))
 
-    @cmds.command("teto", help="fatass teto", usage="teto")
-    async def teto(self, ctx: cmds.Context) -> None:
+    @cmds.command("miku", help="omg mikuu", usage="miku")
+    async def miku(self, ctx: cmds.Context) -> None:
         if ctx.author == bot.user:
             return
         async with ctx.typing():
-            await ctx.send(random.choice(self.TETO_GIFS))
+            gifs = get_gif_from_tenor("hatsune miku")
+            if len(gifs) <= 0:
+                await ctx.send("Couldn't find any miku gifs from tenor")
+            else:
+                await ctx.send(random.choice(gifs))
+
+    @cmds.command("touhou", help="Touhou Project", usage="touhou")
+    async def touhou(self, ctx: cmds.Context) -> None:
+        if ctx.author == bot.user:
+            return
+        async with ctx.typing():
+            gifs = get_gif_from_tenor(random.choice(["Touhou Project", "touhou", "2hu", "touhou fumo", "touhou sex"]))
+            if len(gifs) <= 0:
+                await ctx.send("Couldn't find any touhou gifs from tenor")
+            else:
+                await ctx.send(random.choice(gifs))
 
 class DevCog(cmds.Cog, name='Dev'):
     def __init__(self, bot):
@@ -333,6 +356,12 @@ class DevCog(cmds.Cog, name='Dev'):
             await ctx.send(f"Only {momoyon.mention} can use dev commands")
         logger.error(f"{self.qualified_name}Cog :: {type(error)}")
         await ctx.send(embed=embed)
+
+    @cmds.command("req", help="Performs a web request")
+    async def req(self, ctx, url: str):
+        response = requests.get(url)
+
+        await ctx.send(f"Got response: `{response.content.decode('utf-8')}` with code **{response.status_code}**")
 
     # TODO: This kills the discord bot, but doesnt kill the script itself.
     @cmds.command("kys", help="I will Krill Myself :)")
@@ -481,10 +510,28 @@ async def on_ready():
     for g in bot.guilds:
         logger.info(f"    - Bot in {g.name} with id {g.id}")
 
+def can_trigger(msg):
+    msg_content = msg.content.lower()
+
+    return msg_content.find(".gif") <= -1 and not msg_content.startswith(prefix) and msg_content.find("tenor") <= -1
+
 @bot.event
 async def on_message(msg):
     global config
     if msg.author == bot.user:
+        return
+
+    if msg.content.startswith(prefix) and msg.content != f"{prefix}!":
+        user_last_commands[msg.author] = msg
+
+    if msg.content == f"{prefix}!":
+        if msg.author not in user_last_commands:
+            await msg.reply("You don't have any last commands")
+            return
+
+        logger.info(f"{msg.author}'s last command: {user_last_commands[msg.author]}")
+
+        await bot.process_commands(user_last_commands[msg.author])
         return
 
     if msg.guild == None:
@@ -492,20 +539,21 @@ async def on_message(msg):
         return
 
     # Triggers
-    for trig in config["triggers"]:
-        # logger.info(f"Checking for trigger `{trig}`")
-        if msg.content.find(trig) >= 0:
-            trig_responses = []
-            try:
-                trig_responses = config[f"{trig}_responses"]
-            except Exception as e:
-                logger.warning(f"Failed to find section `{trig}_responses` in config!")
-            if len(trig_responses) <= 0:
-                logger.warning(f"No responses in section `{trig}_responses`!")
-            else:
-                # logger.info(f"Found responses for `{trig}`: {trig_responses}")
-                response = random.choice(trig_responses)
-                await msg.reply(response)
+    if can_trigger(msg):
+        for trig in config["triggers"]:
+            # logger.info(f"Checking for trigger `{trig}`")
+            if msg.content.lower().find(trig) >= 0:
+                trig_responses = []
+                try:
+                    trig_responses = config[f"{trig}_responses"]
+                except Exception as e:
+                    logger.warning(f"Failed to find section `{trig}_responses` in config!")
+                if len(trig_responses) <= 0:
+                    logger.warning(f"No responses in section `{trig}_responses`!")
+                else:
+                    # logger.info(f"Found responses for `{trig}`: {trig_responses}")
+                    response = random.choice(trig_responses)
+                    await msg.reply(response)
 
     text: str = f"[{msg.created_at}][{msg.guild.name}::{msg.channel.name}] {msg.author}: "
     if len(msg.content) > 0:
@@ -538,17 +586,34 @@ async def add_cogs():
 
     await asyncio.gather(*tasks)
 
-async def main():
-    global MOMOYON_USER_ID, hydrus_client
-
-    load_dotenv()
-    token = os.environ["TOKEN"]
-
+def init():
     try:
         hydrus_client = hydrus_api.Client(os.environ["HYDRUS_API_KEY"])
         logger.info(f"Hydrus Client API version: v{hydrus_client.VERSION} | Endpoint API version: v{hydrus_client.get_api_version()['version']}")
     except Exception as e:
         logger.error(f"Failed to init hydrus client!: {e}")
+
+def cleanup():
+    pass
+
+async def main():
+    global MOMOYON_USER_ID, hydrus_client, driver, bot, prefix, testing
+
+    program = sys.argv.pop(0)
+    if len(sys.argv) > 0:
+        arg = sys.argv.pop(0)
+        if arg == "test":
+            testing = True
+            prefix = "@@"
+            bot.prefix = prefix
+
+    if testing:
+        logger.info("Starting TESTING BOT")
+    else:
+        logger.info("Starting DEPLOYMENT BOT")
+
+
+    token = os.environ["TESTING_TOKEN"] if testing else os.environ["TOKEN"]
 
     await add_cogs()
 
@@ -585,7 +650,11 @@ async def main():
 if __name__ == '__main__':
     config = read_config(CONFIG_PATH)
 
+    init()
+
     try:
         asyncio.run(main())
     except KeyboardInterrupt as ki:
-        exit(0)
+        pass
+
+    cleanup()
