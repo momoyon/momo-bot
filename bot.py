@@ -54,6 +54,10 @@ user_last_commands = {}
 # TODO: Check for file change in CONFIG_PATH and reload if so
 
 # Helpers
+def has_command(name: str) -> bool:
+    global bot
+    return bot.get_command(name) is not None
+
 def debug_log_context(ctx: cmds.Context):
     logger.info(f'''Context:
                     subcommand_passed: {ctx.subcommand_passed}
@@ -69,6 +73,17 @@ def get_gif_from_tenor(tenor_search: str):
     if r.status_code == 200:
         gifs = [gif_obj['url'] for gif_obj in json.loads(r.content)['results']]
     return gifs
+
+def make_tenor_command(name):
+    async def _cmd(ctx, *args):
+        # command logic can reference name and args
+        gifs = get_gif_from_tenor(name)
+        if len(gifs) <= 0:
+            await ctx.send("Cannot find on tenor")
+        else:
+            await ctx.send(random.choice(gifs))
+    _cmd.__name__ = f"tenor_cmd_{name}"         # must be unique function name
+    return cmds.Command(_cmd, name=name, help=f"Get random {name} gif from tenor")
 
 def read_config(filepath: str):
     current_section = None
@@ -107,6 +122,18 @@ def write_config(config, filepath):
         for data in config[section]:
             f.write(data + "\n")
     f.close()
+
+def update_tenor_commands():
+    global config
+    try:
+        for tsh in config['tenor_commands']:
+            if has_command(tsh):
+                logger.warning(f"Bot already has the command `{tsh}`")
+            else:
+                bot.add_command(make_tenor_command(tsh))
+                logger.info(f"Added tenor command `{tsh}`")
+    except KeyError:
+        pass
 
 config = {}
 intents = ds.Intents.default()
@@ -417,6 +444,9 @@ class DevCog(cmds.Cog, name='Dev'):
 
         write_config(config, CONFIG_PATH)
 
+        if section == "tenor_commands":
+            update_tenor_commands()
+
         await ctx.send(f"Added `{data}` to `{section}`")
 
     @cmds.command("rcd", help="Remove data from a section in config", usage="rcd <section> <data>")
@@ -436,6 +466,10 @@ class DevCog(cmds.Cog, name='Dev'):
             config.pop(section)
 
         write_config(config, CONFIG_PATH)
+
+        if section == "tenor_commands":
+            bot.remove_command(data)
+            logger.info("Removed tenor command `{data}`")
 
         await ctx.send(f"Removed `{data}` from `{section}`")
 
@@ -649,6 +683,8 @@ async def main():
 
 if __name__ == '__main__':
     config = read_config(CONFIG_PATH)
+
+    update_tenor_commands()
 
     init()
 
