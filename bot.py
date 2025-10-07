@@ -256,7 +256,7 @@ class MiscCog(cmds.Cog, name="Miscellaneous"):
             # Upload to fs.momoyon.org/discord_bot
             if os.path.exists(UPLOAD_LINK_FILENAME):
                 os.remove(UPLOAD_LINK_FILENAME)
-            proc = run(["python", "u2c.py", "-a", os.environ["COPYPARTYPASS"], UPLOAD_URL, "output.gif", "-uf", UPLOAD_LINK_FILENAME, "-j", "1", "--ow"])
+            proc = run(["python", "u2c.py", "-a", os.environ["COPYPARTYPASS"], UPLOAD_URL, "output.gif", "-uf", UPLOAD_LINK_FILENAME, "-j", "1", "--ow", "--dr", "--drd"])
 
             if proc.returncode != 0:
                 await ctx.send(f"Failed to upload gif: u2c.py ERROR")
