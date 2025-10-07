@@ -74,7 +74,7 @@ def get_gif_from_tenor(tenor_search: str):
         gifs = [gif_obj['url'] for gif_obj in json.loads(r.content)['results']]
     return gifs
 
-def make_tenor_command(name):
+def make_tenor_command(name, aliases=None):
     async def _cmd(ctx, *args):
         # command logic can reference name and args
         gifs = get_gif_from_tenor(name)
@@ -83,7 +83,11 @@ def make_tenor_command(name):
         else:
             await ctx.send(random.choice(gifs))
     _cmd.__name__ = f"tenor_cmd_{name}"         # must be unique function name
-    return cmds.Command(_cmd, name=name, help=f"Get random {name} gif from tenor")
+    if aliases:
+        cmd = cmds.Command(_cmd, name=name, help=f"Get random {name} gif from tenor", aliases=aliases)
+    else:
+        cmd = cmds.Command(_cmd, name=name, help=f"Get random {name} gif from tenor")
+    return cmd
 
 def read_config(filepath: str):
     current_section = None
@@ -127,11 +131,23 @@ def update_tenor_commands():
     global config
     try:
         for tsh in config['tenor_commands']:
-            if has_command(tsh):
-                logger.warning(f"Bot already has the command `{tsh}`")
+
+            search = tsh
+            aliases = []
+            if tsh.find(",") > 0:
+                a = tsh.split(",")
+                search = a[0]
+
+                aliases = a[1:]
+
+            if has_command(search):
+                logger.warning(f"Bot already has the command `{search}`")
             else:
-                bot.add_command(make_tenor_command(tsh))
-                logger.info(f"Added tenor command `{tsh}`")
+                bot.add_command(make_tenor_command(search, aliases))
+                if aliases:
+                    logger.info(f"Added tenor command `{search}` with aliases `{aliases}`")
+                else:
+                    logger.info(f"Added tenor command `{search}`")
     except KeyError:
         pass
 
