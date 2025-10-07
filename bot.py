@@ -7,6 +7,8 @@ from typing import List, Any, cast
 from dotenv import load_dotenv
 import asyncio
 
+from subprocess import run
+
 import logging, coloredlogs
 
 import requests, json
@@ -35,6 +37,9 @@ TENOR_API_KEY = os.environ['TENOR_API_KEY']
 TENOR_LIMIT = 1000
 TENOR_CKEY = "discordBotTenorApi" # Same name as the project name in google cloud console.
 
+UPLOAD_URL="https://fs.momoyon.org/discord_bot/"
+UPLOAD_LINK_FILENAME="link.txt"
+
 CONFIG_PATH="./config.momo"
 
 RUN_DISCORD_BOT=True
@@ -57,6 +62,16 @@ user_last_commands = {}
 def has_command(name: str) -> bool:
     global bot
     return bot.get_command(name) is not None
+
+def get_mp4_to_file(output: str, link: str) -> (bool, str):
+    with open(output, "wb") as f:
+        req = requests.get(link)
+        if not req.ok:
+            return (False, f"Failed to GET '{link}'")
+        f.write(req._content)
+
+    return (True, "OK")
+
 
 def debug_log_context(ctx: cmds.Context):
     logger.info(f'''Context:
@@ -221,6 +236,38 @@ class MiscCog(cmds.Cog, name="Miscellaneous"):
     @cmds.command("website", help="My website", usage="website")
     async def github(self, ctx: cmds.Context):
         await ctx.send(f"{self.website_link}")
+
+    @cmds.command("to_gif", help="Converts an mp4 to gif", usage="to_gif <mp4_link>")
+    async def to_gif(self, ctx: cmds.Context, *, mp4_link: str):
+        if ctx.author == bot.user:
+            return
+
+        ok, err_msg = get_mp4_to_file("output.mp4", mp4_link)
+
+        if not ok:
+            await ctx.send(f"ERROR: {err_msg}")
+        else:
+
+            proc = run(["ffmpeg", "-i", "output.mp4", "output.gif", "-y"])
+
+            if proc.returncode != 0:
+                await ctx.send(f"Failed to convert to gif: FFMPEG ERROR")
+
+            # Upload to fs.momoyon.org/discord_bot
+            if os.path.exists(UPLOAD_LINK_FILENAME):
+                os.remove(UPLOAD_LINK_FILENAME)
+            proc = run(["python", "u2c.py", "-a", os.environ["COPYPARTYPASS"], UPLOAD_URL, "output.gif", "-uf", UPLOAD_LINK_FILENAME, "-j", "1", "--ow"])
+
+            if proc.returncode != 0:
+                await ctx.send(f"Failed to upload gif: u2c.py ERROR")
+
+            link = ""
+
+            with open(UPLOAD_LINK_FILENAME) as f:
+                link = f.read()
+
+            await ctx.send(link)
+
 
     @cmds.command("swapcase", help="Inverts the case of the input.", usage="swap <text>")
     async def swapcase(self, ctx: cmds.Context, *, text: str):
