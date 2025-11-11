@@ -72,6 +72,15 @@ def get_mp4_to_file(output: str, link: str) -> (bool, str):
 
     return (True, "OK")
 
+def is_instalink(msg):
+    return msg.find("instagram.com") >= 0
+
+def instafix(link):
+    if not is_instalink(link):
+        logger.error(f"{link} is not a valid instagram link!")
+        return link
+
+    return link.replace("instagram.com", "insta.momoyon.org")
 
 def debug_log_context(ctx: cmds.Context):
     logger.info(f'''Context:
@@ -228,6 +237,25 @@ class MiscCog(cmds.Cog, name="Miscellaneous"):
             return
         for i in range(n):
             await ctx.send(random.choice(self.lorem_ipsums))
+
+
+    @cmds.command("join_insta_users", help="Join the insta users group", usage="join_insta_users")
+    async def join_insta_users(self, ctx: cmds.Context):
+        global config
+        user = ctx.author
+
+        if "insta_users" not in config:
+            config["insta_users"] = []
+
+        if str(user.id) in config["insta_users"]:
+            await ctx.reply("You are already in the insta users group!")
+            return
+
+        config["insta_users"].append(str(user.id))
+
+        write_config(config, CONFIG_PATH)
+        await ctx.reply("You are now added to the insta users group")
+
 
     @cmds.command("github", help="Github repo link of myself", usage="github")
     async def github(self, ctx: cmds.Context):
@@ -536,20 +564,27 @@ class DevCog(cmds.Cog, name='Dev'):
 
         await ctx.send(f"Removed `{data}` from `{section}`")
 
-    @cmds.command("lsconfig", help="List the configuration", usage="lsconfig")
-    async def lsconfig(self, ctx: cmds.Context):
-        try:
-            with open(CONFIG_PATH, 'rb') as f:
-                f.seek(0, os.SEEK_END)
-                filesize = f.tell()
-                logger.info(f"Length of '{CONFIG_PATH}': {filesize}")
-                f.seek(0)
+    @cmds.command("lsconfig", help="List the configuration", usage="lsconfig [section]")
+    async def lsconfig(self, ctx: cmds.Context, section_name: str = ""):
+        global config
+        if section_name:
+            if section_name not in config:
+                await ctx.send(f"{section_name} is not a valid section!")
+            else:
+                await ctx.send(config[section_name])
+        else:
+            try:
+                with open(CONFIG_PATH, 'rb') as f:
+                    f.seek(0, os.SEEK_END)
+                    filesize = f.tell()
+                    logger.info(f"Length of '{CONFIG_PATH}': {filesize}")
+                    f.seek(0)
 
-                file = ds.File(f, filename="config.txt")
-                await ctx.send(file=file)
-        except FileNotFoundError:
-            logger.error(f"File '{CONFIG}' doesn't exist!")
-            await ctx.send("ERROR: Cannot find a valid config file in CWD...", silent=True)
+                    file = ds.File(f, filename="config.txt")
+                    await ctx.send(file=file)
+            except FileNotFoundError:
+                logger.error(f"File '{CONFIG}' doesn't exist!")
+                await ctx.send("ERROR: Cannot find a valid config file in CWD...", silent=True)
 
     @cmds.command("chan_id", help="Gets the id of the channel.", usage="chan_id")
     async def chan_id(self, ctx: cmds.Context) -> None:
@@ -634,6 +669,16 @@ async def on_message(msg):
     if msg.guild == None:
         logger.error("msg.guild == None in on_message(); This should not happen!")
         return
+
+    if is_instalink(msg.content):
+        logger.info("Found instagram link...")
+        link = instafix(msg.content)
+        u = msg.author.display_name
+        if str(msg.author.id) in config["insta_users"]:
+            logger.info(f"User {u} is part of insta users")
+            channel = msg.channel
+            await msg.delete()
+            await channel.send(f"{u}: {link}")
 
     # Triggers
     if can_trigger(msg):
