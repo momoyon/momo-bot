@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 import asyncio
 
 from subprocess import run
+import platform
 
 import logging, coloredlogs
 
@@ -90,6 +91,25 @@ def debug_log_context(ctx: cmds.Context):
                     current_argument:  {ctx.current_argument}
                     current_parameter: {ctx.current_parameter}
                     ''')
+
+async def mc_command(ctx: cmds.Context, cmd: str):
+    async with ctx.typing():
+        if "MINECRAFT_SERVER_RCON_HOSTNAME" not in os.environ\
+            or "MINECRAFT_SERVER_RCON_PORT" not in os.environ\
+            or "MINECRAFT_SERVER_RCON_PASSWORD" not in os.environ:
+                await ctx.send("Bot doesn't have credentials for connecting to MC Rcon; Inform administrator (momoyon)")
+                return ""
+
+        exe_name = "ARRCON.exe" if platform.system() == "Windows" else "ARRCON"
+        proc = run([f"./thirdparty/ARRCON/{exe_name}", "-H", os.environ["MINECRAFT_SERVER_RCON_HOSTNAME"],
+                    "-P", os.environ["MINECRAFT_SERVER_RCON_PORT"], 
+                    "-p", os.environ["MINECRAFT_SERVER_RCON_PASSWORD"],
+                    "-e", cmd,
+                   ],
+                   capture_output=True,
+                   text=True)
+
+        return proc.stdout.split("\x1b[0m ")[1] 
 
 def get_gif_from_tenor(tenor_search: str):
     r = requests.get("https://tenor.googleapis.com/v2/search?q=%s&key=%s&client_key=%s&limit=%s&media_filter=gif&random=true" % (tenor_search, TENOR_API_KEY, TENOR_CKEY, TENOR_LIMIT))
@@ -229,6 +249,22 @@ class MiscCog(cmds.Cog, name="Miscellaneous"):
         embed.description += f"\nUsage: {ctx.command.usage}"
         logger.error(f"{self.qualified_name}Cog :: {type(error)}")
         await ctx.send(embed=embed)
+
+    @cmds.command("mc_join", help="Adds username to the whitelist of Minecraft Server", usage="join_mc <username>")
+    async def mc_join(self, ctx: cmds.Context, username: str):
+        output = await mc_command(ctx, f"whitelist add {username}")
+
+        async with ctx.typing():
+            if output.find("Added"):
+                await ctx.send(f"Added {username} to whitelist!")
+
+                l = await mc_command(ctx, "whitelist list")
+                players = l[l.find("players:"):].removeprefix("players:")
+
+                await ctx.send(f"Current whitelist: {players}")
+            else:
+                await ctx.send(f"Failed to add {username} to whitelist!")
+            
 
     @cmds.command("lorem", help="Spams a bunch of text *n* times to block off shit you don't wanna see.", usage="lorem [n] [force]")
     async def lorem(self, ctx: cmds.Context, n: int = MAX_LOREM_N, force: bool = False):
@@ -474,6 +510,11 @@ class DevCog(cmds.Cog, name='Dev'):
             await ctx.send(f"Only {momoyon.mention} can use dev commands")
         logger.error(f"{self.qualified_name}Cog :: {type(error)}")
         await ctx.send(embed=embed)
+
+    @cmds.command("mcrcon", help="Sends an RCON command to the Minecraft Server")
+    async def mcrcon(self, ctx, cmd: str):
+        output = await mc_command(ctx, cmd)
+        await ctx.send(f"RCON: `{output}`")
 
     @cmds.command("req", help="Performs a web request")
     async def req(self, ctx, url: str):
