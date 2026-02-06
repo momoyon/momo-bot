@@ -7,6 +7,9 @@ from typing import List, Any, cast
 from dotenv import load_dotenv
 import asyncio
 
+from subprocess import run
+import platform
+
 import logging, coloredlogs
 
 import requests, json
@@ -35,6 +38,9 @@ TENOR_API_KEY = os.environ['TENOR_API_KEY']
 TENOR_LIMIT = 1000
 TENOR_CKEY = "discordBotTenorApi" # Same name as the project name in google cloud console.
 
+UPLOAD_URL="https://fs.momoyon.org/discord_bot/"
+UPLOAD_LINK_FILENAME="link.txt"
+
 CONFIG_PATH="./config.momo"
 
 RUN_DISCORD_BOT=True
@@ -54,6 +60,29 @@ user_last_commands = {}
 # TODO: Check for file change in CONFIG_PATH and reload if so
 
 # Helpers
+def has_command(name: str) -> bool:
+    global bot
+    return bot.get_command(name) is not None
+
+def get_mp4_to_file(output: str, link: str) -> (bool, str):
+    with open(output, "wb") as f:
+        req = requests.get(link)
+        if not req.ok:
+            return (False, f"Failed to GET '{link}'")
+        f.write(req._content)
+
+    return (True, "OK")
+
+def is_instalink(msg):
+    return msg.find("instagram.com") >= 0
+
+def instafix(link):
+    if not is_instalink(link):
+        logger.error(f"{link} is not a valid instagram link!")
+        return link
+
+    return link.replace("instagram.com", "insta.momoyon.org")
+
 def debug_log_context(ctx: cmds.Context):
     logger.info(f'''Context:
                     subcommand_passed: {ctx.subcommand_passed}
@@ -63,12 +92,46 @@ def debug_log_context(ctx: cmds.Context):
                     current_parameter: {ctx.current_parameter}
                     ''')
 
+async def mc_command(ctx: cmds.Context, cmd: str):
+    async with ctx.typing():
+        if "MINECRAFT_SERVER_RCON_HOSTNAME" not in os.environ\
+            or "MINECRAFT_SERVER_RCON_PORT" not in os.environ\
+            or "MINECRAFT_SERVER_RCON_PASSWORD" not in os.environ:
+                await ctx.send("Bot doesn't have credentials for connecting to MC Rcon; Inform administrator (momoyon)")
+                return ""
+
+        exe_name = "ARRCON.exe" if platform.system() == "Windows" else "ARRCON"
+        proc = run([f"./thirdparty/ARRCON/{exe_name}", "-H", os.environ["MINECRAFT_SERVER_RCON_HOSTNAME"],
+                    "-P", os.environ["MINECRAFT_SERVER_RCON_PORT"], 
+                    "-p", os.environ["MINECRAFT_SERVER_RCON_PASSWORD"],
+                    "-e", cmd,
+                   ],
+                   capture_output=True,
+                   text=True)
+
+        return proc.stdout.split("\x1b[0m ")[1] 
+
 def get_gif_from_tenor(tenor_search: str):
     r = requests.get("https://tenor.googleapis.com/v2/search?q=%s&key=%s&client_key=%s&limit=%s&media_filter=gif&random=true" % (tenor_search, TENOR_API_KEY, TENOR_CKEY, TENOR_LIMIT))
 
     if r.status_code == 200:
         gifs = [gif_obj['url'] for gif_obj in json.loads(r.content)['results']]
     return gifs
+
+def make_tenor_command(name, aliases=None):
+    async def _cmd(ctx, *args):
+        # command logic can reference name and args
+        gifs = get_gif_from_tenor(name)
+        if len(gifs) <= 0:
+            await ctx.send("Cannot find on tenor")
+        else:
+            await ctx.send(random.choice(gifs))
+    _cmd.__name__ = f"tenor_cmd_{name}"         # must be unique function name
+    if aliases:
+        cmd = cmds.Command(_cmd, name=name, help=f"Get random {name} gif from tenor", aliases=aliases)
+    else:
+        cmd = cmds.Command(_cmd, name=name, help=f"Get random {name} gif from tenor")
+    return cmd
 
 def read_config(filepath: str):
     current_section = None
@@ -107,6 +170,30 @@ def write_config(config, filepath):
         for data in config[section]:
             f.write(data + "\n")
     f.close()
+
+def update_tenor_commands():
+    global config
+    try:
+        for tsh in config['tenor_commands']:
+
+            search = tsh
+            aliases = []
+            if tsh.find(",") > 0:
+                a = tsh.split(",")
+                search = a[0]
+
+                aliases = a[1:]
+
+            if has_command(search):
+                logger.warning(f"Bot already has the command `{search}`")
+            else:
+                bot.add_command(make_tenor_command(search, aliases))
+                if aliases:
+                    logger.info(f"Added tenor command `{search}` with aliases `{aliases}`")
+                else:
+                    logger.info(f"Added tenor command `{search}`")
+    except KeyError:
+        pass
 
 config = {}
 intents = ds.Intents.default()
@@ -163,6 +250,22 @@ class MiscCog(cmds.Cog, name="Miscellaneous"):
         logger.error(f"{self.qualified_name}Cog :: {type(error)}")
         await ctx.send(embed=embed)
 
+    @cmds.command("mc_join", help="Adds username to the whitelist of Minecraft Server", usage="join_mc <username>")
+    async def mc_join(self, ctx: cmds.Context, username: str):
+        output = await mc_command(ctx, f"whitelist add {username}")
+
+        async with ctx.typing():
+            if output.find("Added"):
+                await ctx.send(f"Added {username} to whitelist!")
+
+                l = await mc_command(ctx, "whitelist list")
+                players = l[l.find("players:"):].removeprefix("players:")
+
+                await ctx.send(f"Current whitelist: {players}")
+            else:
+                await ctx.send(f"Failed to add {username} to whitelist!")
+            
+
     @cmds.command("lorem", help="Spams a bunch of text *n* times to block off shit you don't wanna see.", usage="lorem [n] [force]")
     async def lorem(self, ctx: cmds.Context, n: int = MAX_LOREM_N, force: bool = False):
         if n > MAX_LOREM_N and not force:
@@ -171,6 +274,25 @@ class MiscCog(cmds.Cog, name="Miscellaneous"):
         for i in range(n):
             await ctx.send(random.choice(self.lorem_ipsums))
 
+
+    @cmds.command("join_insta_users", help="Join the insta users group", usage="join_insta_users")
+    async def join_insta_users(self, ctx: cmds.Context):
+        global config
+        user = ctx.author
+
+        if "insta_users" not in config:
+            config["insta_users"] = []
+
+        if str(user.id) in config["insta_users"]:
+            await ctx.reply("You are already in the insta users group!")
+            return
+
+        config["insta_users"].append(str(user.id))
+
+        write_config(config, CONFIG_PATH)
+        await ctx.reply("You are now added to the insta users group")
+
+
     @cmds.command("github", help="Github repo link of myself", usage="github")
     async def github(self, ctx: cmds.Context):
         await ctx.send(f"{self.github_link}")
@@ -178,6 +300,38 @@ class MiscCog(cmds.Cog, name="Miscellaneous"):
     @cmds.command("website", help="My website", usage="website")
     async def github(self, ctx: cmds.Context):
         await ctx.send(f"{self.website_link}")
+
+    @cmds.command("to_gif", help="Converts an mp4 to gif", usage="to_gif <mp4_link>")
+    async def to_gif(self, ctx: cmds.Context, *, mp4_link: str):
+        if ctx.author == bot.user:
+            return
+
+        ok, err_msg = get_mp4_to_file("output.mp4", mp4_link)
+
+        if not ok:
+            await ctx.send(f"ERROR: {err_msg}")
+        else:
+
+            proc = run(["ffmpeg", "-i", "output.mp4", "output.gif", "-y"])
+
+            if proc.returncode != 0:
+                await ctx.send(f"Failed to convert to gif: FFMPEG ERROR")
+
+            # Upload to fs.momoyon.org/discord_bot
+            if os.path.exists(UPLOAD_LINK_FILENAME):
+                os.remove(UPLOAD_LINK_FILENAME)
+            proc = run(["python", "u2c.py", "-a", os.environ["COPYPARTYPASS"], UPLOAD_URL, "output.gif", "-uf", UPLOAD_LINK_FILENAME, "-j", "1", "--ow", "--dr", "--drd"])
+
+            if proc.returncode != 0:
+                await ctx.send(f"Failed to upload gif: u2c.py ERROR")
+
+            link = ""
+
+            with open(UPLOAD_LINK_FILENAME) as f:
+                link = f.read()
+
+            await ctx.send(link)
+
 
     @cmds.command("swapcase", help="Inverts the case of the input.", usage="swap <text>")
     async def swapcase(self, ctx: cmds.Context, *, text: str):
@@ -357,6 +511,11 @@ class DevCog(cmds.Cog, name='Dev'):
         logger.error(f"{self.qualified_name}Cog :: {type(error)}")
         await ctx.send(embed=embed)
 
+    @cmds.command("mcrcon", help="Sends an RCON command to the Minecraft Server")
+    async def mcrcon(self, ctx, cmd: str):
+        output = await mc_command(ctx, cmd)
+        await ctx.send(f"RCON: `{output}`")
+
     @cmds.command("req", help="Performs a web request")
     async def req(self, ctx, url: str):
         response = requests.get(url)
@@ -417,6 +576,9 @@ class DevCog(cmds.Cog, name='Dev'):
 
         write_config(config, CONFIG_PATH)
 
+        if section == "tenor_commands":
+            update_tenor_commands()
+
         await ctx.send(f"Added `{data}` to `{section}`")
 
     @cmds.command("rcd", help="Remove data from a section in config", usage="rcd <section> <data>")
@@ -437,22 +599,33 @@ class DevCog(cmds.Cog, name='Dev'):
 
         write_config(config, CONFIG_PATH)
 
+        if section == "tenor_commands":
+            bot.remove_command(data)
+            logger.info("Removed tenor command `{data}`")
+
         await ctx.send(f"Removed `{data}` from `{section}`")
 
-    @cmds.command("lsconfig", help="List the configuration", usage="lsconfig")
-    async def lsconfig(self, ctx: cmds.Context):
-        try:
-            with open(CONFIG_PATH, 'rb') as f:
-                f.seek(0, os.SEEK_END)
-                filesize = f.tell()
-                logger.info(f"Length of '{CONFIG_PATH}': {filesize}")
-                f.seek(0)
+    @cmds.command("lsconfig", help="List the configuration", usage="lsconfig [section]")
+    async def lsconfig(self, ctx: cmds.Context, section_name: str = ""):
+        global config
+        if section_name:
+            if section_name not in config:
+                await ctx.send(f"{section_name} is not a valid section!")
+            else:
+                await ctx.send(config[section_name])
+        else:
+            try:
+                with open(CONFIG_PATH, 'rb') as f:
+                    f.seek(0, os.SEEK_END)
+                    filesize = f.tell()
+                    logger.info(f"Length of '{CONFIG_PATH}': {filesize}")
+                    f.seek(0)
 
-                file = ds.File(f, filename="config.txt")
-                await ctx.send(file=file)
-        except FileNotFoundError:
-            logger.error(f"File '{CONFIG}' doesn't exist!")
-            await ctx.send("ERROR: Cannot find a valid config file in CWD...", silent=True)
+                    file = ds.File(f, filename="config.txt")
+                    await ctx.send(file=file)
+            except FileNotFoundError:
+                logger.error(f"File '{CONFIG}' doesn't exist!")
+                await ctx.send("ERROR: Cannot find a valid config file in CWD...", silent=True)
 
     @cmds.command("chan_id", help="Gets the id of the channel.", usage="chan_id")
     async def chan_id(self, ctx: cmds.Context) -> None:
@@ -537,6 +710,16 @@ async def on_message(msg):
     if msg.guild == None:
         logger.error("msg.guild == None in on_message(); This should not happen!")
         return
+
+    if is_instalink(msg.content):
+        logger.info("Found instagram link...")
+        link = instafix(msg.content)
+        u = msg.author.display_name
+        if str(msg.author.id) in config["insta_users"]:
+            logger.info(f"User {u} is part of insta users")
+            channel = msg.channel
+            await msg.delete()
+            await channel.send(f"{u}: {link}")
 
     # Triggers
     if can_trigger(msg):
@@ -649,6 +832,8 @@ async def main():
 
 if __name__ == '__main__':
     config = read_config(CONFIG_PATH)
+
+    update_tenor_commands()
 
     init()
 
