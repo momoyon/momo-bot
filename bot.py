@@ -81,7 +81,7 @@ def instafix(link):
         logger.error(f"{link} is not a valid instagram link!")
         return link
 
-    return link.replace("instagram.com", "insta.momoyon.org")
+    return link.replace("instagram.com", "kkinstagram.com")
 
 def debug_log_context(ctx: cmds.Context):
     logger.info(f'''Context:
