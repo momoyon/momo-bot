@@ -265,13 +265,13 @@ class AnilistCog(cmds.Cog, name="Anilist"):
 
             await ctx.send("SEE LOGS!")
 
-            logger.info(animes)
+            logger.info(animes.keys())
 
             e = ds.Embed(
-                    title=animes.name_romaji,
-                    description=animes.desc,
+                    title=animes['name_romaji'],
+                    description=animes['desc'],
                     colour=ds.Colour.red())
-            e.set_image(animes.cover_image)
+            e.set_image(animes['cover_image'])
             e.add_field('Romaji Name', f"{animes['name_romaji']}")
             e.add_field('English Name', f"{animes['name_english']}")
             e.add_field('Airing Date', f"{animes['starting_time']} ~ {animes['ending_time']}")
