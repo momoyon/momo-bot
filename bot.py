@@ -267,6 +267,20 @@ class AnilistCog(cmds.Cog, name="Anilist"):
 
             logger.info(animes)
 
+            e = ds.Embed(
+                    title=content.name_romaji,
+                    description=content.desc,
+                    colour=ds.Colour.red())
+            e.set_image(content.cover_image)
+            e.add_field('Romaji Name', f"{content.name_romaji}")
+            e.add_field('English Name', f"{content.name_english}")
+            e.add_field('Airing Date', f"{content.starting_time} ~ {content.ending_time}")
+            e.add_field('Status', f"{content.airing_status}")
+            e.add_field('Episode(s)', f"{content.airing_episodes}")
+            e.add_field('Genre(s)', f"{content.genres}")
+
+            await ctx.send(embed=e)
+
 class MiscCog(cmds.Cog, name="Miscellaneous"):
     def __init__(self, bot):
         self.bot = bot
