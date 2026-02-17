@@ -53,6 +53,8 @@ DISCORD_HTTP_BODY_MAX_LEN=2000
 
 MAX_LOREM_N = 3
 
+ANILIST_URL = "https://graphql.anilist.co"
+
 user_last_commands = {}
 
 # TODO: Implement RPC
@@ -232,6 +234,53 @@ bot = cmds.Bot(command_prefix=determine_prefix, intents=intents)
 logger: logging.Logger = logging.getLogger("bot")
 
 # COGS ###########################################
+class AnilistCog(cmds.Cog, name="Anilist"):
+    def __init__(self, bot):
+        self.bot = bot
+
+    async def cog_command_error(self, ctx: cmds.Context, error: Exception) -> None:
+        assert type(ctx.command) == cmds.Command
+        embed = ds.Embed(title="Error")
+        if isinstance(error, cmds.CommandInvokeError):
+            error = error.original
+        embed.description = f"Error: {error}"
+
+        embed.description += f"\nUsage: {ctx.command.usage}"
+        logger.error(f"{self.qualified_name}Cog :: {type(error)}")
+        await ctx.send(embed=embed)
+
+    @cmds.command("anime", help="Looks up anime info on Anilist", usage="anime <title>")
+    async def anime(self, ctx: cmds.Context, title: str):
+        async with ctx.typing():
+            if len(title) <= 0:
+                await ctx.reply("Title is empty brah")
+                query = '''
+                    query($search: String!) {
+                        Page {
+                            media(search: $search, type: ANIME) {
+                                id
+                                title {
+                                    romaji
+                                    english
+                                    native
+                                }
+                            }
+                        }
+                    }
+                '''
+
+                variables = { 'search': title }
+                response = requests.post(url, json={'query': query, 'variables': variables})
+
+                if not response.ok:
+                    await ctx.reply("Could not complete the query")
+                    return
+
+                content = response.content.decode('UTF-8')
+                logger.info(f"ANILIST QUERY RESULT: {content}")
+
+                await ctx.reply(content)
+
 class MiscCog(cmds.Cog, name="Miscellaneous"):
     def __init__(self, bot):
         self.bot = bot
