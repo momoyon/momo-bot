@@ -7,6 +7,8 @@ from typing import List, Any, cast
 from dotenv import load_dotenv
 import asyncio
 
+import ast
+
 from subprocess import run
 import platform
 
@@ -271,16 +273,18 @@ class AnilistCog(cmds.Cog, name="Anilist"):
             '''
 
             variables = { 'search': title }
-            response = requests.post(url, json={'query': query, 'variables': variables})
+            response = requests.post(ANILIST_URL, json={'query': query, 'variables': variables})
 
             if not response.ok:
                 await ctx.reply("Could not complete the query")
                 return
 
             content = response.content.decode('UTF-8')
-            logger.info(f"ANILIST QUERY RESULT: {content}")
 
-            await ctx.reply(content)
+            content_dict = ast.literal_eval(content)
+            logger.info(f"ANILIST QUERY RESULT: {content_dict}")
+
+            await ctx.send("DONE! SEE LOGS")
 
 class MiscCog(cmds.Cog, name="Miscellaneous"):
     def __init__(self, bot):
