@@ -254,32 +254,33 @@ class AnilistCog(cmds.Cog, name="Anilist"):
         async with ctx.typing():
             if len(title) <= 0:
                 await ctx.reply("Title is empty brah")
-                query = '''
-                    query($search: String!) {
-                        Page {
-                            media(search: $search, type: ANIME) {
-                                id
-                                title {
-                                    romaji
-                                    english
-                                    native
-                                }
+                return
+            query = '''
+                query($search: String!) {
+                    Page {
+                        media(search: $search, type: ANIME) {
+                            id
+                            title {
+                                romaji
+                                english
+                                native
                             }
                         }
                     }
-                '''
+                }
+            '''
 
-                variables = { 'search': title }
-                response = requests.post(url, json={'query': query, 'variables': variables})
+            variables = { 'search': title }
+            response = requests.post(url, json={'query': query, 'variables': variables})
 
-                if not response.ok:
-                    await ctx.reply("Could not complete the query")
-                    return
+            if not response.ok:
+                await ctx.reply("Could not complete the query")
+                return
 
-                content = response.content.decode('UTF-8')
-                logger.info(f"ANILIST QUERY RESULT: {content}")
+            content = response.content.decode('UTF-8')
+            logger.info(f"ANILIST QUERY RESULT: {content}")
 
-                await ctx.reply(content)
+            await ctx.reply(content)
 
 class MiscCog(cmds.Cog, name="Miscellaneous"):
     def __init__(self, bot):
