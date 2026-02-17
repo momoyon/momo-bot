@@ -282,6 +282,7 @@ class AnilistCog(cmds.Cog, name="Anilist"):
             content = response.content.decode('UTF-8')
 
             content_dict = ast.literal_eval(content)
+            logger.info(f"ANILIST QUERY RESULT RAW: {content_dict}")
             logger.info(f"ANILIST QUERY RESULT: {content_dict}")
 
             await ctx.send("DONE! SEE LOGS")
