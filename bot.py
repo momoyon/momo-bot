@@ -809,6 +809,7 @@ async def on_message(msg):
 
 async def add_cogs():
     coroutines = []
+    coroutines.append(bot.add_cog(AnilistCog(bot)))
     coroutines.append(bot.add_cog(MiscCog(bot)))
     coroutines.append(bot.add_cog(BoopCog(bot)))
     coroutines.append(bot.add_cog(DevCog(bot)))
