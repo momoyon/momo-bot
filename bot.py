@@ -263,9 +263,7 @@ class AnilistCog(cmds.Cog, name="Anilist"):
 
             animes = self.anilist.get_anime(title)
 
-            await ctx.send("SEE LOGS!")
-
-            logger.info(animes.keys())
+            logger.info(animes)
 
             e = ds.Embed(
                     title=animes['name_romaji'],
