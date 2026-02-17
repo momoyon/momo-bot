@@ -271,13 +271,13 @@ class AnilistCog(cmds.Cog, name="Anilist"):
                     title=animes['name_romaji'],
                     description=animes['desc'],
                     colour=ds.Colour.red())
-            e.set_image(animes['cover_image'])
-            e.add_field('Romaji Name', f"{animes['name_romaji']}")
-            e.add_field('English Name', f"{animes['name_english']}")
-            e.add_field('Airing Date', f"{animes['starting_time']} ~ {animes['ending_time']}")
-            e.add_field('Status', f"{animes['airing_status']}")
-            e.add_field('Episode(s)', f"{animes['airing_episodes']}")
-            e.add_field('Genre(s)', f"{animes['genres']}")
+            e.set_image(url=animes['cover_image'])
+            e.add_field(name='Romaji Name',  value=f"{animes['name_romaji']}")
+            e.add_field(name='English Name', value=f"{animes['name_english']}")
+            e.add_field(name='Airing Date',  value=f"{animes['starting_time']} ~ {animes['ending_time']}")
+            e.add_field(name='Status',       value=f"{animes['airing_status']}")
+            e.add_field(name='Episode(s)',   value=f"{animes['airing_episodes']}")
+            e.add_field(name='Genre(s)',     value=f"{animes['genres']}")
 
             await ctx.send(embed=e)
 
