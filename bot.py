@@ -7,6 +7,8 @@ from typing import List, Any, cast
 from dotenv import load_dotenv
 import asyncio
 
+from AnilistPython import Anilist
+
 import ast
 
 from subprocess import run
@@ -239,6 +241,7 @@ logger: logging.Logger = logging.getLogger("bot")
 class AnilistCog(cmds.Cog, name="Anilist"):
     def __init__(self, bot):
         self.bot = bot
+        self.anilist = Anilist()
 
     async def cog_command_error(self, ctx: cmds.Context, error: Exception) -> None:
         assert type(ctx.command) == cmds.Command
@@ -257,35 +260,12 @@ class AnilistCog(cmds.Cog, name="Anilist"):
             if len(title) <= 0:
                 await ctx.reply("Title is empty brah")
                 return
-            query = '''
-                query($search: String!) {
-                    Page {
-                        media(search: $search, type: ANIME) {
-                            id
-                            title {
-                                romaji
-                                english
-                                native
-                            }
-                        }
-                    }
-                }
-            '''
 
-            variables = { 'search': title }
-            response = requests.post(ANILIST_URL, json={'query': query, 'variables': variables})
+            animes = self.anilist.get_anime(title)
 
-            if not response.ok:
-                await ctx.reply("Could not complete the query")
-                return
+            await ctx.send("SEE LOGS!")
 
-            content = response.content.decode('UTF-8')
-
-            content_dict = ast.literal_eval(content)
-            logger.info(f"ANILIST QUERY RESULT RAW: {content_dict}")
-            logger.info(f"ANILIST QUERY RESULT: {content_dict}")
-
-            await ctx.send("DONE! SEE LOGS")
+            logger.info(animes)
 
 class MiscCog(cmds.Cog, name="Miscellaneous"):
     def __init__(self, bot):

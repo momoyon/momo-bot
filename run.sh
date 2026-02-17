@@ -22,7 +22,7 @@ fi
 pip install --upgrade pip
 
 # Load packages from a common file so that run.bat also can use it
-pip install pynacl discord.py python-dotenv coloredlogs aiofile requests hydrus-api bs4
+pip install pynacl discord.py python-dotenv coloredlogs aiofile requests hydrus-api bs4 AnilistPython==0.1.3
 
 python -u ./bot.py $*
 
