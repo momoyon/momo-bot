@@ -1,7 +1,7 @@
 import discord as ds
 import discord.ext.commands as cmds
 import os, random, sys
-from typing import cast
+from typing import Mapping, cast
 from dotenv import load_dotenv
 import asyncio
 
@@ -54,7 +54,7 @@ MAX_LOREM_N = 3
 
 ANILIST_URL = "https://graphql.anilist.co"
 
-user_last_commands = {}
+user_last_commands: dict[int, ds.Message] = {}
 
 # TODO: Implement RPC
 
@@ -732,22 +732,44 @@ def can_trigger(msg):
     return msg_content.find(".gif") <= -1 and not msg_content.startswith(prefix) and msg_content.find("tenor") <= -1
 
 @bot.event
-async def on_message(msg):
+async def on_message(msg: ds.Message):
     global config
     if msg.author == bot.user:
         return
 
-    if msg.content.startswith(prefix) and msg.content != f"{prefix}!":
-        user_last_commands[msg.author] = msg
+    if msg.content.startswith(prefix) and not msg.content.startswith(f"{prefix}!"):
+        user_last_commands[msg.author.id] = msg
 
     if msg.content.startswith(f"{prefix}!"):
-        if msg.author not in user_last_commands:
+        repeat_count: int = 1
+
+        if len(msg.content) > len(f"{prefix}!"):
+            try:
+                prefix_removed = msg.content.removeprefix(f'{prefix}!')
+                repeat_count = int(prefix_removed)
+            except ValueError:
+                logger.warning(f"Ignoring non-integer last_command_repeat_count...")
+
+        if msg.author.id not in user_last_commands:
             await msg.reply("You don't have any last commands")
             return
 
-        logger.info(f"{msg.author}'s last command: {user_last_commands[msg.author]}")
+        last_msg = user_last_commands[msg.author.id]
+        if 'VERBOSE_LOG' in os.environ:
+            logger.info(f"{msg.author}'s last command: {last_msg.content}")
 
-        await bot.process_commands(user_last_commands[msg.author])
+        # Cap repeat_count
+        C = 10
+        cap = C
+        if 'LAST_COMMAND_REPEAT_HARD_CAP' in os.environ:
+            try:
+                cap = int(os.environ['LAST_COMMAND_REPEAT_HARD_CAP'])
+            except:
+                cap = C
+        repeat_count = min(repeat_count, cap)
+
+        for _ in range(repeat_count):
+            await bot.process_commands(last_msg)
         return
 
     if msg.guild == None:
@@ -831,13 +853,19 @@ async def main():
         arg = sys.argv.pop(0)
         if arg == "test":
             testing = True
-            prefix = "@@"
+            prefix = "$$"
             bot.command_prefix = prefix
 
+            if 'DEBUG_LOGGING' in os.environ:
+                # NOTE: Reinit loggin to include DEBUG logs
+                logging.basicConfig(level=logging.DEBUG)
+                coloredlogs.install(level=logging.DEBUG)
+
+
     if testing:
-        logger.info("Starting TESTING BOT")
+        logger.info(f"Starting TESTING BOT (prefix: {bot.command_prefix})")
     else:
-        logger.info("Starting DEPLOYMENT BOT")
+        logger.info(f"Starting PRODUCTION BOT (prefix: {bot.command_prefix})")
 
 
     token = os.environ["TESTING_TOKEN"] if testing else os.environ["TOKEN"]
