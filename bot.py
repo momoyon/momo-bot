@@ -1,15 +1,12 @@
 import discord as ds
-from discord import FFmpegPCMAudio
 import discord.ext.commands as cmds
-import discord.ext.tasks as tasks
 import os, random, sys
-from typing import List, Any, cast
+from typing import Mapping, cast
 from dotenv import load_dotenv
 import asyncio
 
 from AnilistPython import Anilist
 
-import ast
 
 from subprocess import run
 import platform
@@ -17,12 +14,10 @@ import platform
 import logging, coloredlogs
 
 import requests, json
-from bs4 import BeautifulSoup
 
 import bot_com
 
 import hydrus_api
-import hydrus_api.utils
 
 load_dotenv()
 
@@ -59,7 +54,7 @@ MAX_LOREM_N = 3
 
 ANILIST_URL = "https://graphql.anilist.co"
 
-user_last_commands = {}
+user_last_commands: dict[int, ds.Message] = {}
 
 # TODO: Implement RPC
 
@@ -70,12 +65,13 @@ def has_command(name: str) -> bool:
     global bot
     return bot.get_command(name) is not None
 
-def get_mp4_to_file(output: str, link: str) -> (bool, str):
+def get_mp4_to_file(output: str, link: str) -> tuple[bool, str]:
     with open(output, "wb") as f:
         req = requests.get(link)
         if not req.ok:
             return (False, f"Failed to GET '{link}'")
-        f.write(req._content)
+        for chunk in req.iter_content():
+            f.write(chunk)
 
     return (True, "OK")
 
@@ -119,13 +115,13 @@ async def mc_command(ctx: cmds.Context, cmd: str):
 
 def get_gif_from_tenor(tenor_search: str):
     r = requests.get("https://tenor.googleapis.com/v2/search?q=%s&key=%s&client_key=%s&limit=%s&media_filter=gif&random=true" % (tenor_search, TENOR_API_KEY, TENOR_CKEY, TENOR_LIMIT))
-
+    gifs = []
     if r.status_code == 200:
         gifs = [gif_obj['url'] for gif_obj in json.loads(r.content)['results']]
     return gifs
 
 def make_tenor_command(name, aliases=None):
-    async def _cmd(ctx, *args):
+    async def _cmd(ctx):
         # command logic can reference name and args
         gifs = get_gif_from_tenor(name)
         if len(gifs) <= 0:
@@ -223,7 +219,7 @@ class BotState:
         return self.guild().text_channels[self.working_channel_idx]
 
 prefix = "!!"
-def determine_prefix(bot, msg):
+def determine_prefix(*_):
     global prefix, testing
     # logger.info(f"DETERMINE PREFIX ARGS: {sys.argv}")
     if testing:
@@ -318,7 +314,7 @@ class MiscCog(cmds.Cog, name="Miscellaneous"):
         if n > MAX_LOREM_N and not force:
             await ctx.send(f"WARNING: Sending bunch of text {n} times is a lot! pass `true` to make sure!")
             return
-        for i in range(n):
+        for _ in range(n):
             await ctx.send(random.choice(self.lorem_ipsums))
 
 
@@ -345,7 +341,7 @@ class MiscCog(cmds.Cog, name="Miscellaneous"):
         await ctx.send(f"{self.github_link}")
 
     @cmds.command("website", help="My website", usage="website")
-    async def github(self, ctx: cmds.Context):
+    async def website(self, ctx: cmds.Context):
         await ctx.send(f"{self.website_link}")
 
     @cmds.command("to_gif", help="Converts an mp4 to gif", usage="to_gif <mp4_link>")
@@ -426,6 +422,7 @@ class MiscCog(cmds.Cog, name="Miscellaneous"):
         if member == None:
             member = ctx.author
 
+        assert(member is not None)
         if server_avatar:
             await ctx.send(member.display_avatar)
         else:
@@ -589,7 +586,6 @@ class DevCog(cmds.Cog, name='Dev'):
 
     @cmds.command("react", help="Reacts to a message with an emoji", usage="react <message_id> <emoji>")
     async def react(self, ctx: cmds.Context, message_id: int, emoji: str):
-        msg = None
         try:
             msg: ds.Message = await ctx.fetch_message(message_id)
         except Exception as e:
@@ -671,7 +667,7 @@ class DevCog(cmds.Cog, name='Dev'):
                     file = ds.File(f, filename="config.txt")
                     await ctx.send(file=file)
             except FileNotFoundError:
-                logger.error(f"File '{CONFIG}' doesn't exist!")
+                logger.error(f"File '{CONFIG_PATH}' doesn't exist!")
                 await ctx.send("ERROR: Cannot find a valid config file in CWD...", silent=True)
 
     @cmds.command("chan_id", help="Gets the id of the channel.", usage="chan_id")
@@ -736,22 +732,44 @@ def can_trigger(msg):
     return msg_content.find(".gif") <= -1 and not msg_content.startswith(prefix) and msg_content.find("tenor") <= -1
 
 @bot.event
-async def on_message(msg):
+async def on_message(msg: ds.Message):
     global config
     if msg.author == bot.user:
         return
 
-    if msg.content.startswith(prefix) and msg.content != f"{prefix}!":
-        user_last_commands[msg.author] = msg
+    if msg.content.startswith(prefix) and not msg.content.startswith(f"{prefix}!"):
+        user_last_commands[msg.author.id] = msg
 
-    if msg.content == f"{prefix}!":
-        if msg.author not in user_last_commands:
+    if msg.content.startswith(f"{prefix}!"):
+        repeat_count: int = 1
+
+        if len(msg.content) > len(f"{prefix}!"):
+            try:
+                prefix_removed = msg.content.removeprefix(f'{prefix}!')
+                repeat_count = int(prefix_removed)
+            except ValueError:
+                logger.warning(f"Ignoring non-integer last_command_repeat_count...")
+
+        if msg.author.id not in user_last_commands:
             await msg.reply("You don't have any last commands")
             return
 
-        logger.info(f"{msg.author}'s last command: {user_last_commands[msg.author]}")
+        last_msg = user_last_commands[msg.author.id]
+        if 'VERBOSE_LOG' in os.environ:
+            logger.info(f"{msg.author}'s last command: {last_msg.content}")
 
-        await bot.process_commands(user_last_commands[msg.author])
+        # Cap repeat_count
+        C = 10
+        cap = C
+        if 'LAST_COMMAND_REPEAT_HARD_CAP' in os.environ:
+            try:
+                cap = int(os.environ['LAST_COMMAND_REPEAT_HARD_CAP'])
+            except:
+                cap = C
+        repeat_count = min(repeat_count, cap)
+
+        for _ in range(repeat_count):
+            await bot.process_commands(last_msg)
         return
 
     if msg.guild == None:
@@ -777,7 +795,7 @@ async def on_message(msg):
                 try:
                     trig_responses = config[f"{trig}_responses"]
                 except Exception as e:
-                    logger.warning(f"Failed to find section `{trig}_responses` in config!")
+                    logger.warning(f"{e}: Failed to find section `{trig}_responses` in config!")
                 if len(trig_responses) <= 0:
                     logger.warning(f"No responses in section `{trig}_responses`!")
                 else:
@@ -830,18 +848,24 @@ def cleanup():
 async def main():
     global MOMOYON_USER_ID, hydrus_client, driver, bot, prefix, testing
 
-    program = sys.argv.pop(0)
+    sys.argv.pop(0)
     if len(sys.argv) > 0:
         arg = sys.argv.pop(0)
         if arg == "test":
             testing = True
-            prefix = "@@"
-            bot.prefix = prefix
+            prefix = "$$"
+            bot.command_prefix = prefix
+
+            if 'DEBUG_LOGGING' in os.environ:
+                # NOTE: Reinit loggin to include DEBUG logs
+                logging.basicConfig(level=logging.DEBUG)
+                coloredlogs.install(level=logging.DEBUG)
+
 
     if testing:
-        logger.info("Starting TESTING BOT")
+        logger.info(f"Starting TESTING BOT (prefix: {bot.command_prefix})")
     else:
-        logger.info("Starting DEPLOYMENT BOT")
+        logger.info(f"Starting PRODUCTION BOT (prefix: {bot.command_prefix})")
 
 
     token = os.environ["TESTING_TOKEN"] if testing else os.environ["TOKEN"]
