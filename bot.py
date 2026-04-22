@@ -758,6 +758,7 @@ async def on_message(msg: ds.Message):
         if 'VERBOSE_LOG' in os.environ:
             logger.info(f"{msg.author}'s last command: {last_msg.content}")
 
+        # TODO: Inform user if they provided > CAP
         # Cap repeat_count
         C = 10
         cap = C
