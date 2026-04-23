@@ -21,6 +21,8 @@ import hydrus_api
 
 load_dotenv()
 
+BAIY_SERVER_LOG_CHANNEL_ID=1496892468862648540
+
 HYDRUS_NAME="hydrus"
 HYDRUS_REQUIRED_PERMS = {
         hydrus_api.Permission.IMPORT_URLS,
@@ -61,6 +63,11 @@ user_last_commands: dict[int, ds.Message] = {}
 # TODO: Check for file change in CONFIG_PATH and reload if so
 
 # Helpers
+async def send_log(guild, content):
+    channel = guild.get_channel(BAIY_SERVER_LOG_CHANNEL_ID)
+    if channel:
+        await channel.send(content)
+
 def has_command(name: str) -> bool:
     global bot
     return bot.get_command(name) is not None
@@ -198,7 +205,7 @@ def update_tenor_commands():
         pass
 
 config = {}
-intents = ds.Intents.default()
+intents = ds.Intents.all()
 intents.members = True
 intents.presences = True
 intents.message_content = True
@@ -737,6 +744,11 @@ async def on_message(msg: ds.Message):
     if msg.author == bot.user:
         return
 
+    await send_log(
+        message.guild,
+        f"[MSG] {message.author} in #{message.channel}: {message.content}"
+    )
+
     if msg.content.startswith(prefix) and not msg.content.startswith(f"{prefix}!"):
         user_last_commands[msg.author.id] = msg
 
@@ -823,6 +835,54 @@ async def on_message(msg: ds.Message):
     logger.info(text)
 
     await bot.process_commands(msg)
+
+@bot.event
+async def on_message_edit(before, after):
+    if before.author.bot:
+        return
+
+    if before.content != after.content:
+        await send_log(
+            after.guild,
+            f"[MSG_EDIT] {after.author} edited a message\nBefore: {before.content}\nAfter: {after.content}"
+        )
+
+@bot.event
+async def on_message_delete(message):
+    if message.author.bot:
+        return
+
+    await send_log(
+        message.guild,
+        f"[MSG_DEL] {message.author} deleted: {message.content}"
+    )
+
+@bot.event
+async def on_member_join(member):
+    await send_log(member.guild, f"[JOIN] Joined: {member}")
+
+@bot.event
+async def on_member_join(member):
+    await send_log(member.guild, f"[LEAVE] Joined: {member}")
+
+@bot.event
+async def on_member_ban(guild, user):
+    await send_log(guild, f"[BAN] Banned: {user}")
+
+@bot.event
+async def on_member_unban(guild, user):
+    await send_log(guild, f"[UNBAN] Unbanned: {user}")
+
+@bot.event
+async def on_member_update(before, after):
+    added_roles = set(after.roles) - set(before.roles)
+    removed_roles = set(before.roles) - set(after.roles)
+
+    for role in added_roles:
+        await send_log(after.guild, f"[+ROLE] {after} got role {role}")
+
+    for role in removed_roles:
+        await send_log(after.guild, f"[-ROLE] {after} lost role {role}")
 
 async def add_cogs():
     coroutines = []

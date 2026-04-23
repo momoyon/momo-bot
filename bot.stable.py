@@ -7,6 +7,10 @@ from typing import List, Any, cast
 from dotenv import load_dotenv
 import asyncio
 
+from AnilistPython import Anilist
+
+import ast
+
 from subprocess import run
 import platform
 
@@ -53,6 +57,8 @@ DISCORD_HTTP_BODY_MAX_LEN=2000
 
 MAX_LOREM_N = 3
 
+ANILIST_URL = "https://graphql.anilist.co"
+
 user_last_commands = {}
 
 # TODO: Implement RPC
@@ -81,7 +87,7 @@ def instafix(link):
         logger.error(f"{link} is not a valid instagram link!")
         return link
 
-    return link.replace("instagram.com", "insta.momoyon.org")
+    return link.replace("instagram.com", "kkinstagram.com")
 
 def debug_log_context(ctx: cmds.Context):
     logger.info(f'''Context:
@@ -232,6 +238,47 @@ bot = cmds.Bot(command_prefix=determine_prefix, intents=intents)
 logger: logging.Logger = logging.getLogger("bot")
 
 # COGS ###########################################
+class AnilistCog(cmds.Cog, name="Anilist"):
+    def __init__(self, bot):
+        self.bot = bot
+        self.anilist = Anilist()
+
+    async def cog_command_error(self, ctx: cmds.Context, error: Exception) -> None:
+        assert type(ctx.command) == cmds.Command
+        embed = ds.Embed(title="Error")
+        if isinstance(error, cmds.CommandInvokeError):
+            error = error.original
+        embed.description = f"Error: {error}"
+
+        embed.description += f"\nUsage: {ctx.command.usage}"
+        logger.error(f"{self.qualified_name}Cog :: {type(error)}")
+        await ctx.send(embed=embed)
+
+    @cmds.command("anime", help="Looks up anime info on Anilist", usage="anime <title>")
+    async def anime(self, ctx: cmds.Context, title: str):
+        async with ctx.typing():
+            if len(title) <= 0:
+                await ctx.reply("Title is empty brah")
+                return
+
+            animes = self.anilist.get_anime(title)
+
+            logger.info(animes)
+
+            e = ds.Embed(
+                    title=animes['name_romaji'],
+                    description=animes['desc'],
+                    colour=ds.Colour.red())
+            e.set_image(url=animes['cover_image'])
+            e.add_field(name='Romaji Name',  value=f"{animes['name_romaji']}")
+            e.add_field(name='English Name', value=f"{animes['name_english']}")
+            e.add_field(name='Airing Date',  value=f"{animes['starting_time']} ~ {animes['ending_time']}")
+            e.add_field(name='Status',       value=f"{animes['airing_status']}")
+            e.add_field(name='Episode(s)',   value=f"{animes['airing_episodes']}")
+            e.add_field(name='Genre(s)',     value=f"{animes['genres']}")
+
+            await ctx.send(embed=e)
+
 class MiscCog(cmds.Cog, name="Miscellaneous"):
     def __init__(self, bot):
         self.bot = bot
@@ -760,6 +807,7 @@ async def on_message(msg):
 
 async def add_cogs():
     coroutines = []
+    coroutines.append(bot.add_cog(AnilistCog(bot)))
     coroutines.append(bot.add_cog(MiscCog(bot)))
     coroutines.append(bot.add_cog(BoopCog(bot)))
     coroutines.append(bot.add_cog(DevCog(bot)))
