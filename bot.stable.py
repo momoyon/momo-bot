@@ -1,15 +1,21 @@
 import discord as ds
-from discord import FFmpegPCMAudio
 import discord.ext.commands as cmds
-import discord.ext.tasks as tasks
 import os, random, sys
-from typing import List, Any, cast
+from typing import Any, List, cast
 from dotenv import load_dotenv
 import asyncio
+from discord import FFmpegPCMAudio
+
+# TODO: Music doesn't auto-stop/auto-play to next song
+
+# Fix for Python 3.14 where sys.argv may be empty
+if not sys.argv:
+    sys.argv = ['bot.py']
+
+import yt_dlp
 
 from AnilistPython import Anilist
 
-import ast
 
 from subprocess import run
 import platform
@@ -17,14 +23,14 @@ import platform
 import logging, coloredlogs
 
 import requests, json
-from bs4 import BeautifulSoup
 
 import bot_com
 
 import hydrus_api
-import hydrus_api.utils
 
 load_dotenv()
+
+BAIY_SERVER_LOG_CHANNEL_ID=1496892468862648540
 
 HYDRUS_NAME="hydrus"
 HYDRUS_REQUIRED_PERMS = {
@@ -59,23 +65,29 @@ MAX_LOREM_N = 3
 
 ANILIST_URL = "https://graphql.anilist.co"
 
-user_last_commands = {}
+user_last_commands: dict[int, ds.Message] = {}
 
 # TODO: Implement RPC
 
 # TODO: Check for file change in CONFIG_PATH and reload if so
 
 # Helpers
+async def send_log(guild, content):
+    channel = guild.get_channel(BAIY_SERVER_LOG_CHANNEL_ID)
+    if channel:
+        await channel.send(content)
+
 def has_command(name: str) -> bool:
     global bot
     return bot.get_command(name) is not None
 
-def get_mp4_to_file(output: str, link: str) -> (bool, str):
+def get_mp4_to_file(output: str, link: str) -> tuple[bool, str]:
     with open(output, "wb") as f:
         req = requests.get(link)
         if not req.ok:
             return (False, f"Failed to GET '{link}'")
-        f.write(req._content)
+        for chunk in req.iter_content():
+            f.write(chunk)
 
     return (True, "OK")
 
@@ -119,13 +131,13 @@ async def mc_command(ctx: cmds.Context, cmd: str):
 
 def get_gif_from_tenor(tenor_search: str):
     r = requests.get("https://tenor.googleapis.com/v2/search?q=%s&key=%s&client_key=%s&limit=%s&media_filter=gif&random=true" % (tenor_search, TENOR_API_KEY, TENOR_CKEY, TENOR_LIMIT))
-
+    gifs = []
     if r.status_code == 200:
         gifs = [gif_obj['url'] for gif_obj in json.loads(r.content)['results']]
     return gifs
 
 def make_tenor_command(name, aliases=None):
-    async def _cmd(ctx, *args):
+    async def _cmd(ctx):
         # command logic can reference name and args
         gifs = get_gif_from_tenor(name)
         if len(gifs) <= 0:
@@ -202,7 +214,7 @@ def update_tenor_commands():
         pass
 
 config = {}
-intents = ds.Intents.default()
+intents = ds.Intents.all()
 intents.members = True
 intents.presences = True
 intents.message_content = True
@@ -223,7 +235,7 @@ class BotState:
         return self.guild().text_channels[self.working_channel_idx]
 
 prefix = "!!"
-def determine_prefix(bot, msg):
+def determine_prefix(*_):
     global prefix, testing
     # logger.info(f"DETERMINE PREFIX ARGS: {sys.argv}")
     if testing:
@@ -238,6 +250,175 @@ bot = cmds.Bot(command_prefix=determine_prefix, intents=intents)
 logger: logging.Logger = logging.getLogger("bot")
 
 # COGS ###########################################
+class MusicCog(cmds.Cog, name="Music"):
+    def __init__(self, bot) -> None:
+        self.bot = bot
+        yt_dlp_options = {
+            "format": "bestaudio",
+            "cookiefile": "cookies.txt",
+            "windowsfilenames": False,
+            "overwrite_existing": True,
+            "default_search": "auto",
+            "logger": logging.getLogger('yt_dlp'),
+        }
+
+        # Fix for Python 3.14 compatibility with yt-dlp
+        if not sys.argv:
+            sys.argv = ['bot.py']
+
+        self.music_queue : List[dict] = []
+        self.ytdlp = yt_dlp.YoutubeDL(yt_dlp_options)
+
+    async def cog_command_error(self, ctx: cmds.Context, error: Exception) -> None:
+        assert type(ctx.command) == cmds.Command
+
+        embed = ds.Embed(title="Error")
+        if isinstance(error, cmds.CommandInvokeError):
+            error = error.original
+        if isinstance(error, yt_dlp.utils.UnsupportedError):
+            embed.description = f"Error: {error}"
+        else:
+            embed.description = f"Error: {error}"
+
+        embed.description += f"\nUsage: {ctx.command.usage}"
+        logger.error(f"{self.qualified_name}Cog :: {type(error)}")
+        await ctx.send(embed=embed)
+
+    async def play_audio(self, ctx, player: ds.VoiceClient, info_dict):
+        title: str = info_dict['title']
+        logger.info(f"Playing '{title}'...")
+        await ctx.send(f"Playing '{title}'...", silent=True)
+
+        player.play(FFmpegPCMAudio(info_dict["url"], options="-vn"))
+
+    @cmds.command("queue", help="Lists the songs in the queue.", usage="queue")
+    async def queue(self, ctx):
+        if ctx.author == bot.user:
+            return
+
+        if len(self.music_queue) <= 0:
+            await ctx.send("Music queue is empty!", silent=True)
+            return
+
+        msg: str = "Music: Queue: "
+        for m in self.music_queue:
+            msg += f"\n- {m['info']['title']}"
+
+        await ctx.send(msg, silent=True)
+
+    # TODO: Find a way to check if the supplied song is already in the queue WITHOUT querying for the video info because that takes time.
+    @cmds.command("play", help="Play youtube videos", usage="play <youtube-link>")
+    async def play(self, ctx, link: str):
+        async with ctx.typing():
+            if not ctx.author.voice:
+                await ctx.send("Please join a Voice Channel and run the command!", silent=True)
+                return
+
+            info_dict = self.ytdlp.extract_info(link, download=False)
+            # assert type(info_dict) == dict[str, Any]
+
+            title = info_dict["title"]
+
+            # The song is in the queue
+            for m in self.music_queue:
+                if title == m['info']['title']:
+                    await ctx.send("Song is already in the queue!", silent=True)
+                    return
+
+            # make the bot join vc
+            player: ds.VoiceClient = ctx.guild.voice_client if ctx.guild.voice_client else await ctx.author.voice.channel.connect()
+
+            if player.is_playing():
+                assert(len(self.music_queue) > 0)
+
+                await ctx.send(f"Another song is already playing, added to queue", silent=True)
+                self.music_queue.append({"info": info_dict, "link": link})
+            else:
+                self.music_queue.insert(0, {"info": info_dict, "link": link})
+
+                await self.play_audio(ctx, player, info_dict)
+
+    @cmds.command("stop", help="Stops the currently playing song, if any.", usage="stop")
+    async def stop(self, ctx):
+        if ctx.guild.voice_client:
+            ctx.guild.voice_client.stop()
+            if len(self.music_queue) > 0:
+                top = self.music_queue.pop()
+                title = top["info"]["title"]
+                await ctx.send(f"Stopped playing '{title}'...", silent=True)
+            if len(self.music_queue) <= 0:
+                await ctx.send("No song left in queue, leaving VC", silent=True)
+                await ctx.guild.voice_client.disconnect()
+            else:
+                await ctx.send("Playing next song in queue...", silent=True)
+                next_song_link = self.music_queue[0]["link"]
+                await self.play(ctx, next_song_link)
+        else:
+            await ctx.send(f"No song is playing!", silent=True)
+
+    @cmds.command("next", help="Skips the current song and plays the next song, if any.")
+    async def next(self, ctx):
+        if ctx.author == bot.user:
+            return
+        async with ctx.typing():
+            async def no_next_song() -> bool:
+                if len(self.music_queue) <= 0:
+                    if ctx.guild.voice_client:
+                        await ctx.send("No song in queue; Exiting from VC", silent=True)
+                        await ctx.guild.voice_client.disconnect()
+                    else:
+                        await ctx.send("No song in queue", silent=True)
+                    return True
+                else:
+                    return False
+
+            if await no_next_song(): return
+
+            if not ctx.guild.voice_client:
+                await ctx.send("No song is currently playing!", silent=True)
+                return
+            if ctx.guild.voice_client:
+                if ctx.voice_client.is_playing():
+                    ctx.voice_client.stop()
+
+            current_song = self.music_queue.pop(0)['info']['title']
+            logger.info(f"Stopped playing {current_song}")
+
+            if await no_next_song(): return
+
+            next_song = self.music_queue[0]
+
+            assert ctx.guild.voice_client
+            player = ctx.guild.voice_client
+
+            await self.play_audio(ctx, player, next_song['info'])
+
+    @cmds.command("pause", help="Paused the currently playing song, if any.", usage="pause")
+    async def pause(self, ctx):
+        if ctx.guild.voice_client:
+            assert(len(self.music_queue) > 0)
+            if not ctx.guild.voice_client.is_playing():
+                await ctx.send("The song is already paused dummy!", delete_after=10.0, silent=True)
+            else:
+                ctx.guild.voice_client.pause()
+                title = self.music_queue[0]["info"]["title"]
+                await ctx.send(f"Paused {title}...", delete_after=10.0, silent=True)
+        else:
+            await ctx.send(f"No song is currently playing", delete_after=10.0, silent=True)
+
+    @cmds.command("resume", help="Resumes the currently paused song, if any.", usage="resume")
+    async def resume(self, ctx):
+        if ctx.guild.voice_client:
+            # Disconnect from VC instead of asserting
+            assert(len(self.music_queue) > 0)
+            if ctx.guild.voice_client.is_playing():
+                await ctx.send("The song is already playing dummy!", delete_after=10.0, silent=True)
+            else:
+                ctx.guild.voice_client.resume()
+                title = self.music_queue[0]["info"]["title"]
+                await ctx.send(f"Resumed {title}...", delete_after=10.0, silent=True)
+        else:
+            await ctx.send(f"No song is currently paused/playing", delete_after=10.0, silent=True)
 class AnilistCog(cmds.Cog, name="Anilist"):
     def __init__(self, bot):
         self.bot = bot
@@ -318,7 +499,7 @@ class MiscCog(cmds.Cog, name="Miscellaneous"):
         if n > MAX_LOREM_N and not force:
             await ctx.send(f"WARNING: Sending bunch of text {n} times is a lot! pass `true` to make sure!")
             return
-        for i in range(n):
+        for _ in range(n):
             await ctx.send(random.choice(self.lorem_ipsums))
 
 
@@ -345,7 +526,7 @@ class MiscCog(cmds.Cog, name="Miscellaneous"):
         await ctx.send(f"{self.github_link}")
 
     @cmds.command("website", help="My website", usage="website")
-    async def github(self, ctx: cmds.Context):
+    async def website(self, ctx: cmds.Context):
         await ctx.send(f"{self.website_link}")
 
     @cmds.command("to_gif", help="Converts an mp4 to gif", usage="to_gif <mp4_link>")
@@ -426,6 +607,7 @@ class MiscCog(cmds.Cog, name="Miscellaneous"):
         if member == None:
             member = ctx.author
 
+        assert(member is not None)
         if server_avatar:
             await ctx.send(member.display_avatar)
         else:
@@ -589,7 +771,6 @@ class DevCog(cmds.Cog, name='Dev'):
 
     @cmds.command("react", help="Reacts to a message with an emoji", usage="react <message_id> <emoji>")
     async def react(self, ctx: cmds.Context, message_id: int, emoji: str):
-        msg = None
         try:
             msg: ds.Message = await ctx.fetch_message(message_id)
         except Exception as e:
@@ -671,7 +852,7 @@ class DevCog(cmds.Cog, name='Dev'):
                     file = ds.File(f, filename="config.txt")
                     await ctx.send(file=file)
             except FileNotFoundError:
-                logger.error(f"File '{CONFIG}' doesn't exist!")
+                logger.error(f"File '{CONFIG_PATH}' doesn't exist!")
                 await ctx.send("ERROR: Cannot find a valid config file in CWD...", silent=True)
 
     @cmds.command("chan_id", help="Gets the id of the channel.", usage="chan_id")
@@ -736,22 +917,50 @@ def can_trigger(msg):
     return msg_content.find(".gif") <= -1 and not msg_content.startswith(prefix) and msg_content.find("tenor") <= -1
 
 @bot.event
-async def on_message(msg):
+async def on_message(msg: ds.Message):
     global config
     if msg.author == bot.user:
         return
 
-    if msg.content.startswith(prefix) and msg.content != f"{prefix}!":
-        user_last_commands[msg.author] = msg
+    await send_log(
+        msg.guild,
+        f"[MSG] {msg.author} in #{msg.channel}: {msg.content}"
+    )
 
-    if msg.content == f"{prefix}!":
-        if msg.author not in user_last_commands:
+    if msg.content.startswith(prefix) and not msg.content.startswith(f"{prefix}!"):
+        user_last_commands[msg.author.id] = msg
+
+    if msg.content.startswith(f"{prefix}!"):
+        repeat_count: int = 1
+
+        if len(msg.content) > len(f"{prefix}!"):
+            try:
+                prefix_removed = msg.content.removeprefix(f'{prefix}!')
+                repeat_count = int(prefix_removed)
+            except ValueError:
+                logger.warning(f"Ignoring non-integer last_command_repeat_count...")
+
+        if msg.author.id not in user_last_commands:
             await msg.reply("You don't have any last commands")
             return
 
-        logger.info(f"{msg.author}'s last command: {user_last_commands[msg.author]}")
+        last_msg = user_last_commands[msg.author.id]
+        if 'VERBOSE_LOG' in os.environ:
+            logger.info(f"{msg.author}'s last command: {last_msg.content}")
 
-        await bot.process_commands(user_last_commands[msg.author])
+        # TODO: Inform user if they provided > CAP
+        # Cap repeat_count
+        C = 10
+        cap = C
+        if 'LAST_COMMAND_REPEAT_HARD_CAP' in os.environ:
+            try:
+                cap = int(os.environ['LAST_COMMAND_REPEAT_HARD_CAP'])
+            except:
+                cap = C
+        repeat_count = min(repeat_count, cap)
+
+        for _ in range(repeat_count):
+            await bot.process_commands(last_msg)
         return
 
     if msg.guild == None:
@@ -777,7 +986,7 @@ async def on_message(msg):
                 try:
                     trig_responses = config[f"{trig}_responses"]
                 except Exception as e:
-                    logger.warning(f"Failed to find section `{trig}_responses` in config!")
+                    logger.warning(f"{e}: Failed to find section `{trig}_responses` in config!")
                 if len(trig_responses) <= 0:
                     logger.warning(f"No responses in section `{trig}_responses`!")
                 else:
@@ -805,6 +1014,54 @@ async def on_message(msg):
 
     await bot.process_commands(msg)
 
+@bot.event
+async def on_message_edit(before, after):
+    if before.author.bot:
+        return
+
+    if before.content != after.content:
+        await send_log(
+            after.guild,
+            f"[MSG_EDIT] {after.author} edited a message\nBefore: {before.content}\nAfter: {after.content}"
+        )
+
+@bot.event
+async def on_message_delete(message):
+    if message.author.bot:
+        return
+
+    await send_log(
+        message.guild,
+        f"[MSG_DEL] {message.author} deleted: {message.content}"
+    )
+
+@bot.event
+async def on_member_join(member):
+    await send_log(member.guild, f"[JOIN] Joined: {member}")
+
+@bot.event
+async def on_member_join(member):
+    await send_log(member.guild, f"[LEAVE] Joined: {member}")
+
+@bot.event
+async def on_member_ban(guild, user):
+    await send_log(guild, f"[BAN] Banned: {user}")
+
+@bot.event
+async def on_member_unban(guild, user):
+    await send_log(guild, f"[UNBAN] Unbanned: {user}")
+
+@bot.event
+async def on_member_update(before, after):
+    added_roles = set(after.roles) - set(before.roles)
+    removed_roles = set(before.roles) - set(after.roles)
+
+    for role in added_roles:
+        await send_log(after.guild, f"[+ROLE] {after} got role {role}")
+
+    for role in removed_roles:
+        await send_log(after.guild, f"[-ROLE] {after} lost role {role}")
+
 async def add_cogs():
     coroutines = []
     coroutines.append(bot.add_cog(AnilistCog(bot)))
@@ -812,6 +1069,7 @@ async def add_cogs():
     coroutines.append(bot.add_cog(BoopCog(bot)))
     coroutines.append(bot.add_cog(DevCog(bot)))
     coroutines.append(bot.add_cog(HydrusCog(bot)))
+    coroutines.append(bot.add_cog(MusicCog(bot)))
 
     tasks = [asyncio.create_task(coroutine) for coroutine in coroutines]
 
@@ -830,18 +1088,24 @@ def cleanup():
 async def main():
     global MOMOYON_USER_ID, hydrus_client, driver, bot, prefix, testing
 
-    program = sys.argv.pop(0)
+    sys.argv.pop(0)
     if len(sys.argv) > 0:
         arg = sys.argv.pop(0)
         if arg == "test":
             testing = True
-            prefix = "@@"
-            bot.prefix = prefix
+            prefix = "$$"
+            bot.command_prefix = prefix
+
+            if 'DEBUG_LOGGING' in os.environ:
+                # NOTE: Reinit loggin to include DEBUG logs
+                logging.basicConfig(level=logging.DEBUG)
+                coloredlogs.install(level=logging.DEBUG)
+
 
     if testing:
-        logger.info("Starting TESTING BOT")
+        logger.info(f"Starting TESTING BOT (prefix: {bot.command_prefix})")
     else:
-        logger.info("Starting DEPLOYMENT BOT")
+        logger.info(f"Starting PRODUCTION BOT (prefix: {bot.command_prefix})")
 
 
     token = os.environ["TESTING_TOKEN"] if testing else os.environ["TOKEN"]

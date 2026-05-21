@@ -1,0 +1,14 @@
+pynacl
+discord
+py
+python
+dotenv
+coloredlogs
+aiofile
+requests
+hydrus
+api
+bs4
+AnilistPython==0.1.3
+yt-dlp
+ytc
