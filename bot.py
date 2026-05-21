@@ -75,7 +75,7 @@ user_last_commands: dict[int, ds.Message] = {}
 async def send_log(guild, content):
     channel = guild.get_channel(BAIY_SERVER_LOG_CHANNEL_ID)
     if channel:
-        await channel.send(content)
+        await channel.send(content, allowed_mentions=ds.AllowedMentions.none())
 
 def has_command(name: str) -> bool:
     global bot
