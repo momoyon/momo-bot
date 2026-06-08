@@ -5,6 +5,8 @@ from typing import Any, List, cast
 from dotenv import load_dotenv
 import asyncio
 from discord import FFmpegPCMAudio
+import json
+from datetime import datetime, timezone
 
 # TODO: Music doesn't auto-stop/auto-play to next song
 
@@ -739,6 +741,70 @@ class DevCog(cmds.Cog, name='Dev'):
             await ctx.send(f"Only {momoyon.mention} can use dev commands")
         logger.error(f"{self.qualified_name}Cog :: {type(error)}")
         await ctx.send(embed=embed)
+
+    @cmds.command("rember", help="I will remember this...")
+    async def rember(self, ctx, message_id: int = None):
+        """Remember a message by ID or by replying to it."""
+        global config
+
+        target_message = None
+
+        # Check if replying to a message
+        if ctx.message.reference is not None:
+            try:
+                target_message = await ctx.channel.fetch_message(ctx.message.reference.message_id)
+            except discord.NotFound:
+                await ctx.send("Could not find the referenced message.")
+                return
+
+        # Otherwise use the provided message ID
+        elif message_id is not None:
+            try:
+                target_message = await ctx.channel.fetch_message(message_id)
+            except discord.NotFound:
+                await ctx.send("Could not find a message with that ID.")
+                return
+        else:
+            await ctx.send("Please either reply to a message or provide a message ID.")
+            return
+
+        # Build the entry as a JSON string (single line, safe for your config format)
+        entry = json.dumps({
+            "message_id":  str(target_message.id),
+            "content":     target_message.content,
+            "author_id":   str(target_message.author.id),
+            "author_name": str(target_message.author),
+            "guild_id":    str(target_message.guild.id)    if target_message.guild  else None,
+            "guild_name":  target_message.guild.name       if target_message.guild  else None,
+            "channel_id":  str(target_message.channel.id),
+            "channel_name":target_message.channel.name,
+            "timestamp":   target_message.created_at.replace(tzinfo=timezone.utc).isoformat(),
+            "attachments": [a.url for a in target_message.attachments],
+            "embeds":      len(target_message.embeds),
+        }, ensure_ascii=False)
+
+        # Load existing config, append, and save
+        config = read_config(CONFIG_PATH) if os.path.exists(CONFIG_PATH) else {}
+
+        if "remembered" not in config:
+            config["remembered"] = []
+
+        # Avoid duplicate entries
+        for existing in config["remembered"]:
+            try:
+                if json.loads(existing).get("message_id") == str(target_message.id):
+                    await ctx.send("That message is already remembered.")
+                    return
+            except json.JSONDecodeError:
+                pass
+
+        config["remembered"].append(entry)
+        write_config(config, CONFIG_PATH)
+
+        await ctx.send(
+            f"Remembered message from **{target_message.author}** "
+            f"sent on <t:{int(target_message.created_at.timestamp())}:F>."
+        )
 
     @cmds.command("mcrcon", help="Sends an RCON command to the Minecraft Server")
     async def mcrcon(self, ctx, cmd: str):
